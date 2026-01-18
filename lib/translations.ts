@@ -94,7 +94,8 @@ export const translations: Record<Language, Translations> = {
   },
 }
 
-export function getTranslation(key: keyof Translations, lang: Language): string {
-  const translation = translations[lang]?.[key]
-  return translation || translations.en[key] || key
+export function getTranslation(key: keyof Translations | string, lang: Language): string {
+  const translationKey = key as keyof Translations
+  const translation = translations[lang]?.[translationKey]
+  return translation || translations.en[translationKey] || String(key)
 }

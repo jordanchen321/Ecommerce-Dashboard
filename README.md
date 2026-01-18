@@ -64,6 +64,44 @@ npm run dev
 4. Search for products by Product ID using the search bar
 5. Remove products by clicking the "Remove" button
 
+## Deployment
+
+### Deploy to Vercel (Recommended)
+
+1. **Push your code to GitHub** (already done ✅)
+
+2. **Import your project to Vercel:**
+   - Go to [vercel.com](https://vercel.com)
+   - Sign in with your GitHub account
+   - Click "Add New Project"
+   - Select your `Ecommerce-Dashboard` repository
+   - Click "Import"
+
+3. **Configure Environment Variables:**
+   - In the Vercel project settings, go to "Settings" → "Environment Variables"
+   - Add the following variables:
+     ```
+     NEXTAUTH_URL=https://your-project-name.vercel.app
+     NEXTAUTH_SECRET=your-secret-key-here (generate with: openssl rand -base64 32)
+     GOOGLE_CLIENT_ID=your-google-client-id
+     GOOGLE_CLIENT_SECRET=your-google-client-secret
+     ```
+   - After adding all variables, **redeploy** the project
+
+4. **Update Google OAuth Settings:**
+   - Go to [Google Cloud Console](https://console.cloud.google.com/)
+   - Navigate to your OAuth 2.0 Client ID
+   - Add your Vercel URL to **Authorized JavaScript origins:**
+     - `https://your-project-name.vercel.app`
+   - Add to **Authorized redirect URIs:**
+     - `https://your-project-name.vercel.app/api/auth/callback/google`
+
+5. **Deploy:**
+   - Click "Deploy" (or it will auto-deploy after environment variables are set)
+   - Your site will be live at `https://your-project-name.vercel.app`
+
+**Important:** The website will only work fully after you set all environment variables in Vercel and update the Google OAuth redirect URLs.
+
 ## Technologies Used
 
 - Next.js 14 (App Router)
