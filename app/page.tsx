@@ -220,7 +220,10 @@ export default function Home() {
     
     const timeoutId = setTimeout(async () => {
       try {
-        console.log(`[Frontend] Saving column configuration...`)
+        const customCols = columns.filter(col => col.isCustom)
+        console.log(`[Frontend] Saving column configuration to MongoDB: ${columns.length} total columns (${customCols.length} custom)`)
+        console.log(`[Frontend] Custom columns:`, customCols.map(c => ({ field: c.field, label: c.label, type: c.type })))
+        
         const response = await fetch('/api/products', {
           method: 'POST',
           headers: {
@@ -237,18 +240,19 @@ export default function Home() {
           // Update with the saved column config from server to ensure sync
           if (data.columnConfig && Array.isArray(data.columnConfig)) {
             lastSavedColumnsRef.current = data.columnConfig as ColumnConfig[]
-            console.log(`[Frontend] ✓ Successfully saved column configuration (${data.columnConfig.length} columns)`)
+            const savedCustomCols = (data.columnConfig as ColumnConfig[]).filter(c => c.isCustom)
+            console.log(`[Frontend] ✓ Successfully saved column configuration to MongoDB (${data.columnConfig.length} total, ${savedCustomCols.length} custom)`)
             console.log(`[Frontend] Column config synced:`, (data.columnConfig as ColumnConfig[]).map((c: ColumnConfig) => ({ field: c.field, label: c.label, visible: c.visible, isCustom: c.isCustom })))
           } else {
             lastSavedColumnsRef.current = columns
-            console.log(`[Frontend] ✓ Successfully saved column configuration`)
+            console.log(`[Frontend] ✓ Column configuration saved (awaiting server confirmation)`)
           }
         } else {
           const errorData = await response.json().catch(() => ({}))
-          console.error(`[Frontend] Failed to save column configuration: ${response.status} ${response.statusText}`, errorData)
+          console.error(`[Frontend] ❌ Failed to save column configuration: ${response.status} ${response.statusText}`, errorData)
         }
       } catch (error) {
-        console.error('[Frontend] Error saving column configuration:', error)
+        console.error('[Frontend] ❌ Error saving column configuration:', error)
       }
     }, 500)
     
