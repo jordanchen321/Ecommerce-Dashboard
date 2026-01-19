@@ -85,6 +85,31 @@ function renderCellValue(product: Product, column: ColumnConfig): React.ReactNod
 
 export default function ProductTable({ products, onRemove, onEdit, columns }: ProductTableProps) {
   const { t } = useLanguage()
+
+  const getDisplayLabel = (column: ColumnConfig): string => {
+    // Always translate core/default columns at render time
+    if (!column.isCustom) {
+      switch (column.field) {
+        case 'image':
+          return t('table.image')
+        case 'productId':
+          return t('table.productId')
+        case 'name':
+          return t('table.name')
+        case 'price':
+          return t('table.price')
+        case 'quantity':
+          return t('table.quantity')
+        case 'totalValue':
+          return t('table.totalValue')
+        case 'actions':
+          return t('table.actions')
+        default:
+          break
+      }
+    }
+    return column.label
+  }
   
   // Filter to only visible columns, and sort so actions is always last
   // Order: Core columns (in original order) -> Custom columns -> Actions
@@ -130,7 +155,7 @@ export default function ProductTable({ products, onRemove, onEdit, columns }: Pr
                   column.field === 'actions' ? 'text-right' : ''
                 }`}
               >
-                {column.label}
+                {getDisplayLabel(column)}
               </th>
             ))}
             {!visibleColumns.some(col => col.field === 'actions') && (

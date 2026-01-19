@@ -149,6 +149,31 @@ export default function ColumnManager({ columns, onColumnsChange, availableField
   const visibleColumns = columns.filter(col => col.visible)
   const hiddenColumns = columns.filter(col => !col.visible)
 
+  const getDisplayLabel = (column: ColumnConfig): string => {
+    // Always translate core/default columns at render time
+    if (!column.isCustom) {
+      switch (column.field) {
+        case 'image':
+          return t('table.image')
+        case 'productId':
+          return t('table.productId')
+        case 'name':
+          return t('table.name')
+        case 'price':
+          return t('table.price')
+        case 'quantity':
+          return t('table.quantity')
+        case 'totalValue':
+          return t('table.totalValue')
+        case 'actions':
+          return t('table.actions')
+        default:
+          break
+      }
+    }
+    return column.label
+  }
+
   return (
     <div className="relative" ref={dropdownRef}>
       <button
@@ -200,7 +225,7 @@ export default function ColumnManager({ columns, onColumnsChange, availableField
                         onChange={() => toggleColumn(column.id)}
                         className="rounded flex-shrink-0"
                       />
-                      <span className="text-sm text-gray-700 truncate">{column.label}</span>
+                      <span className="text-sm text-gray-700 truncate">{getDisplayLabel(column)}</span>
                       {column.isCustom && (
                         <span className="text-xs text-blue-600 flex-shrink-0">{t('columns.custom')}</span>
                       )}
@@ -238,7 +263,7 @@ export default function ColumnManager({ columns, onColumnsChange, availableField
                       onChange={() => toggleColumn(column.id)}
                       className="rounded flex-shrink-0"
                     />
-                    <span className="text-sm text-gray-500 truncate">{column.label}</span>
+                    <span className="text-sm text-gray-500 truncate">{getDisplayLabel(column)}</span>
                   </div>
                 ))}
               </div>
