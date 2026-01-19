@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth/next"
 import { authOptions } from "@/app/api/auth/[...nextauth]/route"
-import clientPromise, { isMongoDBConnected } from "@/lib/mongodb"
+import clientPromise from "@/lib/mongodb"
 
 // Column configuration type (matches frontend)
 interface ColumnConfig {
@@ -89,41 +89,22 @@ export async function GET() {
     // Use MongoDB if configured (persists across deployments)
     // MongoDB data survives all code updates and deployments
     const mongoConfigured = isMongoDBConfigured()
-    const isConnected = mongoConfigured && clientPromise ? await isMongoDBConnected() : false
-    console.log(`[GET] MongoDB check: configured=${mongoConfigured}, clientPromise=${!!clientPromise}, isConnected=${isConnected}`)
+    console.log(`[GET] MongoDB check: configured=${mongoConfigured}, clientPromise=${!!clientPromise}`)
 
-    // CRITICAL: If MongoDB is configured but not currently connected, do NOT fall back
-    // to in-memory storage (that causes "sometimes edited dashboard, sometimes empty default").
-    // Instead, return a retryable error so the frontend keeps last-known-good state and retries.
-    if (mongoConfigured && !isConnected) {
-      console.error(`[GET] ❌ MongoDB configured but not connected. Refusing in-memory fallback for ${userEmail}.`)
+    // If MongoDB is configured but the clientPromise is missing, refuse memory fallback.
+    if (mongoConfigured && !clientPromise) {
       return NextResponse.json(
         { error: "MongoDB temporarily unavailable" },
-        {
-          status: 503,
-          headers: {
-            'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0',
-            'Surrogate-Control': 'no-store',
-          },
-        }
+        { status: 503 }
       )
     }
-    
-    if (mongoConfigured && clientPromise && isConnected) {
+
+    if (mongoConfigured && clientPromise) {
       try {
         console.log(`[GET] Attempting to connect to MongoDB...`)
         const client = await clientPromise
         if (client) {
           console.log(`[GET] ✓ MongoDB client obtained successfully`)
-          // Verify connection is still alive
-          try {
-            await client.db("admin").command({ ping: 1 })
-          } catch (pingError) {
-            console.error("[GET] MongoDB connection health check failed:", pingError)
-            throw new Error("MongoDB connection is not healthy")
-          }
           
           const db = client.db("ecommerce_dashboard")
           const collection = db.collection("products")
@@ -290,32 +271,22 @@ export async function POST(request: NextRequest) {
     // Use MongoDB if configured (persists across deployments)
     // MongoDB is the source of truth - all code updates preserve data in MongoDB
     const mongoConfigured = isMongoDBConfigured()
-    const isConnected = mongoConfigured && clientPromise ? await isMongoDBConnected() : false
-    console.log(`[POST] MongoDB check: configured=${mongoConfigured}, clientPromise=${!!clientPromise}, isConnected=${isConnected}`)
+    console.log(`[POST] MongoDB check: configured=${mongoConfigured}, clientPromise=${!!clientPromise}`)
 
-    // CRITICAL: If MongoDB is configured but not connected, refuse in-memory fallback
-    // to avoid "sometimes saved, sometimes lost" behavior.
-    if (mongoConfigured && !isConnected) {
-      console.error(`[POST] ❌ MongoDB configured but not connected. Refusing in-memory fallback for ${userEmail}.`)
+    // If MongoDB is configured but the clientPromise is missing, refuse memory fallback.
+    if (mongoConfigured && !clientPromise) {
       return NextResponse.json(
         { error: "MongoDB temporarily unavailable" },
         { status: 503 }
       )
     }
     
-    if (mongoConfigured && clientPromise && isConnected) {
+    if (mongoConfigured && clientPromise) {
       try {
         console.log(`[POST] Attempting to connect to MongoDB...`)
         const client = await clientPromise
         if (client) {
           console.log(`[POST] ✓ MongoDB client obtained successfully`)
-          // Verify connection is still alive before operations
-          try {
-            await client.db("admin").command({ ping: 1 })
-          } catch (pingError) {
-            console.error("[POST] MongoDB connection health check failed:", pingError)
-            throw new Error("MongoDB connection is not healthy")
-          }
           
           const db = client.db("ecommerce_dashboard")
           const collection = db.collection("products")
