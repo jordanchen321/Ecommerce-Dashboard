@@ -1,4 +1,5 @@
 import { MongoClient } from 'mongodb'
+import { attachDatabasePool } from '@vercel/functions'
 
 const uri = process.env.MONGODB_URI
 
@@ -6,6 +7,7 @@ let clientPromise: Promise<MongoClient> | null = null
 
 if (uri) {
   const client = new MongoClient(uri)
+  attachDatabasePool(client)
 
   if (process.env.NODE_ENV === 'development') {
     // In development mode, use a global variable so that the value
