@@ -3,6 +3,10 @@ import { getServerSession } from "next-auth/next"
 import { authOptions } from "@/app/api/auth/[...nextauth]/route"
 import clientPromise from "@/lib/mongodb"
 
+// Disable caching for this route
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export interface Product {
   id: string
   name: string
@@ -46,24 +50,55 @@ export async function GET() {
           const userProduct = await collection.findOne({ userEmail })
           const products = (userProduct?.products || []) as Product[]
           
-          // Return existing data (even if empty array - this is valid)
-          return NextResponse.json({ products })
+          console.log(`[GET] MongoDB fetch for ${userEmail}: Found ${products.length} products`)
+          
+          // Return existing data with no-cache headers
+          return NextResponse.json(
+            { products },
+            {
+              headers: {
+                'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0',
+                'Surrogate-Control': 'no-store',
+              },
+            }
+          )
         }
       } catch (error) {
-        console.error("MongoDB error, falling back to in-memory:", error)
+        console.error("[GET] MongoDB error, falling back to in-memory:", error)
         // Fall through to in-memory storage only if MongoDB fails
       }
     }
 
+    console.log(`[GET] MongoDB not configured - using in-memory storage for ${userEmail}`)
+
     // Fallback to in-memory storage (WARNING: data lost on redeploy)
     // This should only be used if MongoDB is not configured
     const products = productsStore[userEmail] || []
-    return NextResponse.json({ products })
+    return NextResponse.json(
+      { products },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+        },
+      }
+    )
   } catch (error) {
-    console.error("Error fetching products:", error)
+    console.error("[GET] Error fetching products:", error)
     // On error, return empty array - don't crash the app
     // But log the error so we know data fetch failed
-    return NextResponse.json({ products: [] })
+    return NextResponse.json(
+      { products: [] },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+          'Pragma': 'no-cache',
+        },
+      }
+    )
   }
 }
 
@@ -98,12 +133,27 @@ export async function POST(request: NextRequest) {
           const db = client.db("ecommerce_dashboard")
           const collection = db.collection("products")
           
+          // Safety check: If trying to save empty array, check if there's existing data
+          // This prevents accidental data loss during initial load race conditions
+          if (products.length === 0) {
+            const existing = await collection.findOne({ userEmail })
+            if (existing && existing.products && Array.isArray(existing.products) && existing.products.length > 0) {
+              // Don't overwrite existing data with empty array - return existing data instead
+              console.log(`Prevented overwriting ${existing.products.length} products with empty array for user ${userEmail}`)
+              return NextResponse.json({ 
+                success: true, 
+                products: existing.products,
+                message: "Preserved existing data" 
+              })
+            }
+          }
+          
           // CRITICAL: Use upsert to preserve data integrity
           // - If document exists: Update it with new products
           // - If document doesn't exist: Create new document with products
           // - userEmail is the unique key - ensures each user's data is separate
           // - This operation is atomic and safe across deployments
-          await collection.updateOne(
+          const result = await collection.updateOne(
             { userEmail },
             { 
               $set: { 
@@ -115,12 +165,22 @@ export async function POST(request: NextRequest) {
             { upsert: true }
           )
           
+          console.log(`[POST] MongoDB save for ${userEmail}: ${result.modifiedCount} modified, ${result.upsertedCount} inserted, ${products.length} products saved`)
+          
           // Return success - data is now safely stored in MongoDB
           // This data will survive all future code updates and deployments
-          return NextResponse.json({ success: true, products })
+          return NextResponse.json(
+            { success: true, products, saved: true, storage: 'mongodb' },
+            {
+              headers: {
+                'Cache-Control': 'no-store, no-cache, must-revalidate',
+                'Pragma': 'no-cache',
+              },
+            }
+          )
         }
       } catch (error) {
-        console.error("MongoDB error, falling back to in-memory:", error)
+        console.error("[POST] MongoDB error, falling back to in-memory:", error)
         // If MongoDB fails, log error but still try in-memory fallback
         // However, this means data won't persist across deployments
       }
@@ -128,8 +188,17 @@ export async function POST(request: NextRequest) {
 
     // Fallback to in-memory storage (WARNING: data lost on redeploy)
     // Only used if MongoDB is not configured or MongoDB connection fails
+    console.log(`[POST] Using in-memory storage for ${userEmail} (MongoDB not configured or failed)`)
     productsStore[userEmail] = products
-    return NextResponse.json({ success: true, products })
+    return NextResponse.json(
+      { success: true, products, saved: true, storage: 'memory', warning: 'Data will be lost on server restart' },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+          'Pragma': 'no-cache',
+        },
+      }
+    )
   } catch (error) {
     console.error("Error saving products:", error)
     // Return error - don't save corrupted data

@@ -1,7 +1,7 @@
 "use client"
 
 import { useSession, signIn, signOut } from "next-auth/react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import ProductForm from "@/components/ProductForm"
 import ProductTable from "@/components/ProductTable"
 import SearchBar from "@/components/SearchBar"
@@ -23,72 +23,136 @@ export default function Home() {
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [isLoaded, setIsLoaded] = useState(false)
+  const isInitialLoadRef = useRef(true)
+  const lastSavedProductsRef = useRef<Product[]>([])
+  const previousEmailRef = useRef<string | null>(null)
 
   // Load products from API when user signs in
   useEffect(() => {
+    // Don't clear products if session is still loading - wait for it to resolve
+    if (status === "loading") {
+      return
+    }
+
+    // Only clear products if user explicitly signed out (session was set before and now is null)
     if (!session?.user?.email) {
-      // Clear products when session is null (signed out)
+      // Only clear if we had a previous session (user signed out)
+      if (previousEmailRef.current !== null) {
+        setProducts([])
+        setFilteredProducts([])
+        setSearchTerm("")
+        setIsLoaded(false)
+        isInitialLoadRef.current = true
+        previousEmailRef.current = null
+      }
+      return
+    }
+
+    const currentEmail = session.user.email
+
+    // If email changed (different user), reset state
+    if (previousEmailRef.current !== null && previousEmailRef.current !== currentEmail) {
       setProducts([])
       setFilteredProducts([])
       setSearchTerm("")
       setIsLoaded(false)
+      isInitialLoadRef.current = true
+    }
+
+    // Skip if we already loaded for this user
+    if (previousEmailRef.current === currentEmail && isLoaded) {
       return
     }
 
-    // Fetch products from API
+    previousEmailRef.current = currentEmail
+
+    // Fetch products from API (with cache-busting)
     const fetchProducts = async () => {
       try {
-        const response = await fetch('/api/products')
+        const response = await fetch('/api/products', {
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache',
+          },
+        })
         if (response.ok) {
           const data = await response.json()
           if (Array.isArray(data.products)) {
+            console.log(`[Frontend] Loaded ${data.products.length} products from server`)
             setProducts(data.products)
             setFilteredProducts(data.products)
+            lastSavedProductsRef.current = data.products
           } else {
+            console.warn('[Frontend] Invalid products data format received')
             setProducts([])
             setFilteredProducts([])
+            lastSavedProductsRef.current = []
           }
         } else {
           // If unauthorized or error, start with empty array
+          console.error(`[Frontend] Failed to load products: ${response.status} ${response.statusText}`)
           setProducts([])
           setFilteredProducts([])
+          lastSavedProductsRef.current = []
         }
         setIsLoaded(true)
+        isInitialLoadRef.current = false
       } catch (error) {
-        console.error('Error loading products:', error)
+        console.error('[Frontend] Error loading products:', error)
         setProducts([])
         setFilteredProducts([])
+        lastSavedProductsRef.current = []
         setIsLoaded(true)
+        isInitialLoadRef.current = false
       }
     }
 
     fetchProducts()
-  }, [session?.user?.email])
+  }, [session?.user?.email, status, isLoaded])
 
   // Save products to API whenever products change (tied to user email)
-  // CRITICAL: Only save after initial data is loaded to prevent overwriting with empty array
+  // CRITICAL: Only save after initial data is loaded and only if products actually changed
   // This ensures user data persists across website updates and deployments
   useEffect(() => {
-    if (!session?.user?.email || !isLoaded) return
+    if (!session?.user?.email || !isLoaded || isInitialLoadRef.current) return
+
+    // Only save if products actually changed (not just initial load)
+    const productsChanged = JSON.stringify(products) !== JSON.stringify(lastSavedProductsRef.current)
+    if (!productsChanged) return
 
     // Debounce API calls - wait a bit before saving to avoid too many requests
     const timeoutId = setTimeout(async () => {
       try {
+        console.log(`[Frontend] Saving ${products.length} products to server...`)
         const response = await fetch('/api/products', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache',
           },
+          cache: 'no-store',
           body: JSON.stringify({ products }),
         })
         
-        if (!response.ok) {
-          console.error('Failed to save products to server - data may not persist')
+        if (response.ok) {
+          const data = await response.json()
+          // Update last saved reference only on success
+          lastSavedProductsRef.current = products
+          if (data.storage === 'mongodb') {
+            console.log(`[Frontend] ✓ Successfully saved ${products.length} products to MongoDB`)
+          } else if (data.storage === 'memory') {
+            console.warn('[Frontend] ⚠ Products saved to memory only (MongoDB not configured) - data will be lost on server restart')
+          }
+        } else {
+          const errorData = await response.json().catch(() => ({}))
+          console.error(`[Frontend] Failed to save products: ${response.status} ${response.statusText}`, errorData)
           // Note: We don't clear products on save error - preserve local state
           // The server-side data in MongoDB remains unchanged
         }
       } catch (error) {
-        console.error('Error saving products:', error)
+        console.error('[Frontend] Error saving products:', error)
         // On error, keep local products - don't clear them
         // MongoDB still has the last successfully saved version
       }
