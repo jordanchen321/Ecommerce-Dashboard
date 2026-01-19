@@ -187,7 +187,7 @@ export default function ColumnManager({ columns, onColumnsChange, availableField
         </svg>
         <span className="hidden sm:inline">{t('columns.manage')}</span>
         <span className="sm:hidden">{t('columns.manage')}</span>
-        <span className="text-xs">({visibleColumns.length}/{columns.length})</span>
+        <span className="text-xs">({visibleColumns.length}/{managedColumns.length})</span>
       </button>
 
       {isOpen && (
