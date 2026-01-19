@@ -291,8 +291,7 @@ export async function POST(request: NextRequest) {
           
           // CRITICAL: Save columnConfig EXACTLY like products - ALWAYS ensure it's in the document
           // MongoDB document MUST have: userEmail, products, columnConfig
-          // If provided in request, ALWAYS save it (same as products)
-          // If not provided, preserve existing (same as products logic)
+          // Document structure: { userEmail: "user@email.com", products: [...], columnConfig: [...] | null, updatedAt: Date }
           if (columnConfig !== undefined) {
             // ALWAYS save when provided - same unconditional save as products
             updateData.columnConfig = columnConfig
@@ -305,21 +304,21 @@ export async function POST(request: NextRequest) {
             } else {
               console.log(`[POST] ⚠ Column config is not an array:`, typeof columnConfig, columnConfig)
             }
-          } else if (existingColumnConfig) {
+          } else if (existingColumnConfig !== null && existingColumnConfig !== undefined) {
             // Not provided - preserve existing (same as products preservation logic)
             updateData.columnConfig = existingColumnConfig
             console.log(`[POST] Preserving existing column configuration: ${Array.isArray(existingColumnConfig) ? existingColumnConfig.length : 'invalid'} columns`)
           } else {
-            // No columnConfig provided and none exists - this should not happen in normal flow
-            // But ensure we at least log it
-            console.log(`[POST] ⚠ No columnConfig in request and none exists in DB - document will not have columnConfig field`)
+            // No columnConfig provided and none exists - set to null to ensure field exists in document
+            updateData.columnConfig = null
+            console.log(`[POST] No columnConfig provided and none exists - setting to null (will use defaults on next load)`)
           }
           
-          // FINAL CHECK: Ensure columnConfig is in updateData before saving
+          // VERIFY: Ensure columnConfig is in updateData before saving
           // The MongoDB document structure should ALWAYS have: { userEmail, products, columnConfig }
-          if (!updateData.columnConfig) {
-            console.warn(`[POST] ⚠⚠⚠ WARNING: columnConfig is NOT in updateData - document will be missing this field!`)
-            console.warn(`[POST] This means the MongoDB document will only have: userEmail, products (missing columnConfig)`)
+          if (!('columnConfig' in updateData)) {
+            console.error(`[POST] ❌❌❌ CRITICAL ERROR: columnConfig is NOT in updateData!`)
+            updateData.columnConfig = null // Force include it
           }
           
           // Save to MongoDB using upsert - EXACT same pattern as products
