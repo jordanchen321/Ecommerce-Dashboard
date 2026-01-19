@@ -21,7 +21,6 @@ interface ColumnManagerProps {
 export default function ColumnManager({ columns, onColumnsChange, availableFields }: ColumnManagerProps) {
   const { t } = useLanguage()
   const [isOpen, setIsOpen] = useState(false)
-  const [newColumnField, setNewColumnField] = useState("")
   const [newColumnLabel, setNewColumnLabel] = useState("")
   const [newColumnType, setNewColumnType] = useState<'text' | 'number' | 'currency' | 'date' | 'image'>('text')
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -59,20 +58,26 @@ export default function ColumnManager({ columns, onColumnsChange, availableField
   }
 
   const addColumn = () => {
-    if (!newColumnField.trim() || !newColumnLabel.trim()) {
-      alert(t('columns.error.fieldAndLabel'))
+    if (!newColumnLabel.trim()) {
+      alert(t('columns.error.labelRequired'))
       return
     }
 
+    // Generate field name from label: lowercase, replace spaces with underscores, remove special chars
+    const fieldName = newColumnLabel.trim()
+      .toLowerCase()
+      .replace(/\s+/g, '_')
+      .replace(/[^a-z0-9_]/g, '')
+
     // Check if field already exists
-    if (columns.some(col => col.field === newColumnField.trim())) {
+    if (columns.some(col => col.field === fieldName)) {
       alert(t('columns.error.duplicate'))
       return
     }
 
     const newColumn: ColumnConfig = {
       id: `custom-${Date.now()}`,
-      field: newColumnField.trim(),
+      field: fieldName,
       label: newColumnLabel.trim(),
       visible: true,
       isCustom: true,
@@ -80,7 +85,6 @@ export default function ColumnManager({ columns, onColumnsChange, availableField
     }
 
     onColumnsChange([...columns, newColumn])
-    setNewColumnField("")
     setNewColumnLabel("")
     setNewColumnType('text')
   }
@@ -174,16 +178,9 @@ export default function ColumnManager({ columns, onColumnsChange, availableField
             <div className="space-y-2">
               <input
                 type="text"
-                value={newColumnField}
-                onChange={(e) => setNewColumnField(e.target.value)}
-                placeholder={t('columns.fieldNamePlaceholder')}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <input
-                type="text"
                 value={newColumnLabel}
                 onChange={(e) => setNewColumnLabel(e.target.value)}
-                placeholder={t('columns.displayLabelPlaceholder')}
+                placeholder={t('columns.labelPlaceholder')}
                 className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
               <select

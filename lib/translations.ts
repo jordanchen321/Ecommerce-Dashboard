@@ -42,14 +42,11 @@ interface Translations {
   'columns.hidden': string
   'columns.custom': string
   'columns.addCustom': string
-  'columns.fieldName': string
-  'columns.fieldNamePlaceholder': string
-  'columns.displayLabel': string
-  'columns.displayLabelPlaceholder': string
+  'columns.labelPlaceholder': string
   'columns.type': string
   'columns.add': string
   'columns.remove': string
-  'columns.error.fieldAndLabel': string
+  'columns.error.labelRequired': string
   'columns.error.duplicate': string
 }
 
@@ -96,15 +93,12 @@ export const translations: Record<Language, Translations> = {
     'columns.hidden': 'Hidden Columns',
     'columns.custom': '(custom)',
     'columns.addCustom': 'Add Custom Column',
-    'columns.fieldName': 'Field Name',
-    'columns.fieldNamePlaceholder': "Field name (e.g., 'category', 'brand')",
-    'columns.displayLabel': 'Display Label',
-    'columns.displayLabelPlaceholder': "Display label (e.g., 'Category', 'Brand')",
+    'columns.labelPlaceholder': "Column name (e.g., 'Category', 'Brand', 'SKU')",
     'columns.type': 'Type',
     'columns.add': 'Add Column',
     'columns.remove': 'Remove column',
-    'columns.error.fieldAndLabel': 'Please enter both field name and label',
-    'columns.error.duplicate': 'A column with this field name already exists',
+    'columns.error.labelRequired': 'Please enter a column name',
+    'columns.error.duplicate': 'A column with this name already exists',
   },
   zh: {
     'app.title': '电商仪表板',
@@ -148,15 +142,12 @@ export const translations: Record<Language, Translations> = {
     'columns.hidden': '隐藏列',
     'columns.custom': '（自定义）',
     'columns.addCustom': '添加自定义列',
-    'columns.fieldName': '字段名称',
-    'columns.fieldNamePlaceholder': "字段名称（例如：'category'、'brand'）",
-    'columns.displayLabel': '显示标签',
-    'columns.displayLabelPlaceholder': "显示标签（例如：'类别'、'品牌'）",
+    'columns.labelPlaceholder': "列名称（例如：'类别'、'品牌'、'SKU'）",
     'columns.type': '类型',
     'columns.add': '添加列',
     'columns.remove': '删除列',
-    'columns.error.fieldAndLabel': '请输入字段名称和显示标签',
-    'columns.error.duplicate': '已存在具有此字段名称的列',
+    'columns.error.labelRequired': '请输入列名称',
+    'columns.error.duplicate': '已存在具有此名称的列',
   },
 }
 

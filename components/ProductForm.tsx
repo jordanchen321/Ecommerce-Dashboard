@@ -20,16 +20,22 @@ export default function ProductForm({ onAdd, customColumns = [] }: ProductFormPr
   
   // Dynamic state for custom columns - only for custom columns (not core fields)
   const [customFields, setCustomFields] = useState<Record<string, string>>({})
+  const [customImagePreviews, setCustomImagePreviews] = useState<Record<string, string>>({})
   
   // Initialize custom fields when customColumns change
   useEffect(() => {
     const initialFields: Record<string, string> = {}
+    const initialPreviews: Record<string, string> = {}
     customColumns.forEach(col => {
       if (col.isCustom && !['name', 'price', 'productId', 'quantity', 'image'].includes(col.field)) {
         initialFields[col.field] = ''
+        if (col.type === 'image') {
+          initialPreviews[col.field] = ''
+        }
       }
     })
     setCustomFields(initialFields)
+    setCustomImagePreviews(initialPreviews)
   }, [customColumns])
 
   const handleSubmit = (e: FormEvent) => {
@@ -54,13 +60,21 @@ export default function ProductForm({ onAdd, customColumns = [] }: ProductFormPr
     }
 
     // Build product object with core fields and custom fields
+    // For image type custom fields, use the preview (base64) instead of the field value
+    const customFieldsWithImages = { ...customFields }
+    Object.keys(customImagePreviews).forEach(field => {
+      if (customImagePreviews[field]) {
+        customFieldsWithImages[field] = customImagePreviews[field]
+      }
+    })
+    
     const productData: Omit<Product, "id"> = {
       name,
       price: priceNum,
       productId,
       quantity: quantityNum,
       image: imagePreview || undefined,
-      ...customFields, // Add custom fields
+      ...customFieldsWithImages, // Add custom fields (with image previews)
     }
     
     onAdd(productData)
@@ -73,12 +87,17 @@ export default function ProductForm({ onAdd, customColumns = [] }: ProductFormPr
     setImagePreview(null)
     // Reset custom fields
     const resetFields: Record<string, string> = {}
+    const resetPreviews: Record<string, string> = {}
     customColumns.forEach(col => {
       if (col.isCustom && !['name', 'price', 'productId', 'quantity', 'image'].includes(col.field)) {
         resetFields[col.field] = ''
+        if (col.type === 'image') {
+          resetPreviews[col.field] = ''
+        }
       }
     })
     setCustomFields(resetFields)
+    setCustomImagePreviews(resetPreviews)
   }
 
   return (
@@ -210,14 +229,39 @@ export default function ProductForm({ onAdd, customColumns = [] }: ProductFormPr
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               ) : column.type === 'image' ? (
-                <input
-                  type="text"
-                  id={`custom-${column.field}`}
-                  value={fieldValue}
-                  onChange={(e) => setCustomFields({ ...customFields, [column.field]: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder={t('form.imageUrlPlaceholder')}
-                />
+                <div>
+                  <input
+                    type="file"
+                    id={`custom-${column.field}`}
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file) {
+                        // Limit file size to 5MB
+                        if (file.size > 5 * 1024 * 1024) {
+                          alert(t('form.error.imageTooLarge') || 'Image size must be less than 5MB')
+                          e.target.value = ''
+                          return
+                        }
+                        const reader = new FileReader()
+                        reader.onloadend = () => {
+                          setCustomImagePreviews({ ...customImagePreviews, [column.field]: reader.result as string })
+                        }
+                        reader.readAsDataURL(file)
+                      }
+                    }}
+                    className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                  />
+                  {customImagePreviews[column.field] && (
+                    <div className="mt-2">
+                      <img
+                        src={customImagePreviews[column.field]}
+                        alt={column.label}
+                        className="w-24 h-24 object-cover rounded-lg border border-gray-300"
+                      />
+                    </div>
+                  )}
+                </div>
               ) : (
                 <input
                   type="text"
