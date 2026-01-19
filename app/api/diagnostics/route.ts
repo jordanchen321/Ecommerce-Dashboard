@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { getMongoDBUriStatus } from "@/lib/mongodb"
 
 // Disable caching
 export const dynamic = 'force-dynamic'
@@ -15,6 +16,10 @@ export async function GET() {
     const nextAuthSecretSet = !!process.env.NEXTAUTH_SECRET
     const googleClientIdSet = !!process.env.GOOGLE_CLIENT_ID
     const googleClientSecretSet = !!process.env.GOOGLE_CLIENT_SECRET
+    const isVercel = !!process.env.VERCEL
+
+    // Get detailed MongoDB URI status
+    const mongoUriStatus = getMongoDBUriStatus()
 
     // Mask MONGODB_URI for security (show only first 20 chars and last 10 chars)
     let mongoUriPreview = "Not set"
@@ -29,13 +34,25 @@ export async function GET() {
 
     return NextResponse.json({
       environment: process.env.NODE_ENV || "unknown",
-      vercel: !!process.env.VERCEL,
+      vercel: isVercel,
+      mongodbUriStatus: {
+        exists: mongoUriStatus.exists,
+        length: mongoUriStatus.length,
+        format: mongoUriStatus.format,
+        preview: mongoUriStatus.preview,
+        clientPromiseExists: mongoUriStatus.clientPromiseExists,
+        note: mongoUriSet 
+          ? `✓ MongoDB URI is configured (${mongoUriStatus.format}, ${mongoUriStatus.length} chars)` 
+          : "❌ MONGODB_URI is NOT set - data will save to memory only"
+      },
       environmentVariables: {
         MONGODB_URI: {
           set: mongoUriSet,
           preview: mongoUriPreview,
+          length: mongoUriSet ? process.env.MONGODB_URI!.length : 0,
+          format: mongoUriStatus.format,
           note: mongoUriSet 
-            ? "✓ MongoDB URI is configured" 
+            ? `✓ MongoDB URI is configured (${mongoUriStatus.format}, ${mongoUriStatus.length} chars)` 
             : "❌ MONGODB_URI is NOT set - data will save to memory only"
         },
         NEXTAUTH_URL: {

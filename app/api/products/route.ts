@@ -284,20 +284,45 @@ export async function POST(request: NextRequest) {
     // MongoDB is the source of truth - all code updates preserve data in MongoDB
     const mongoConfigured = isMongoDBConfigured()
     const hasClientPromise = !!clientPromise
-    console.log(`[POST] MongoDB check: configured=${mongoConfigured}, clientPromise=${hasClientPromise}`)
-    console.log(`[POST] MONGODB_URI exists: ${!!process.env.MONGODB_URI}`)
+    const isVercel = !!process.env.VERCEL
+    const mongoUri = process.env.MONGODB_URI
+    
+    console.log(`[POST] MongoDB configuration check:`)
+    console.log(`[POST]   - MONGODB_URI exists: ${!!mongoUri}`)
+    console.log(`[POST]   - MONGODB_URI length: ${mongoUri ? mongoUri.length : 0} characters`)
+    console.log(`[POST]   - isMongoDBConfigured(): ${mongoConfigured}`)
+    console.log(`[POST]   - clientPromise exists: ${hasClientPromise}`)
+    console.log(`[POST]   - Running on Vercel: ${isVercel}`)
+    console.log(`[POST]   - NODE_ENV: ${process.env.NODE_ENV || 'not set'}`)
     
     // Enhanced logging for Vercel deployment debugging
     if (!mongoConfigured) {
-      console.error(`[POST] ❌❌❌ MONGODB_URI is NOT set in Vercel environment variables!`)
+      console.error(`[POST] ❌❌❌ MONGODB_URI is NOT set in environment variables!`)
       console.error(`[POST] Current environment: ${process.env.NODE_ENV || 'unknown'}`)
-      console.error(`[POST] Running on Vercel: ${!!process.env.VERCEL}`)
-      console.error(`[POST] To fix: Go to Vercel Dashboard → Settings → Environment Variables → Add MONGODB_URI`)
-      console.error(`[POST] Then redeploy: Deployments → ... → Redeploy`)
+      console.error(`[POST] Running on Vercel: ${isVercel}`)
+      
+      if (isVercel) {
+        console.error(`[POST] To fix on Vercel:`)
+        console.error(`[POST] 1. Go to Vercel Dashboard → Your Project → Settings → Environment Variables`)
+        console.error(`[POST] 2. Click "Add New" and enter: Key: MONGODB_URI, Value: your-mongodb-connection-string`)
+        console.error(`[POST] 3. Select ALL environments (Production, Preview, Development)`)
+        console.error(`[POST] 4. Click "Save"`)
+        console.error(`[POST] 5. Go to Deployments → Click "..." on latest deployment → Redeploy`)
+        console.error(`[POST] 6. Wait for redeployment to complete`)
+      } else {
+        console.error(`[POST] To fix locally:`)
+        console.error(`[POST] 1. Add MONGODB_URI to your .env.local file`)
+        console.error(`[POST] 2. Restart your dev server (npm run dev)`)
+      }
       console.error(`[POST] Visit /api/diagnostics to check environment variable status`)
-    } else if (process.env.MONGODB_URI) {
-      const maskedUri = process.env.MONGODB_URI.replace(/:([^:@]+)@/, ':****@')
-      console.log(`[POST] ✓ MONGODB_URI is configured: ${maskedUri.substring(0, 50)}...`)
+    } else if (mongoUri) {
+      const maskedUri = mongoUri.replace(/:([^:@]+)@/, ':****@')
+      const uriPrefix = mongoUri.substring(0, Math.min(20, mongoUri.length))
+      const uriSuffix = mongoUri.length > 30 ? mongoUri.substring(mongoUri.length - 10) : ''
+      console.log(`[POST] ✓ MONGODB_URI is configured`)
+      console.log(`[POST]   - URI preview: ${maskedUri.substring(0, Math.min(50, maskedUri.length))}${maskedUri.length > 50 ? '...' : ''}`)
+      console.log(`[POST]   - URI format: ${mongoUri.startsWith('mongodb+srv://') ? 'mongodb+srv:// (Atlas)' : mongoUri.startsWith('mongodb://') ? 'mongodb:// (Standard)' : 'INVALID'}`)
+      console.log(`[POST]   - URI length: ${mongoUri.length} characters`)
     }
     
     // Try MongoDB first if configured
