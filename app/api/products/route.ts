@@ -91,6 +91,25 @@ export async function GET() {
     const mongoConfigured = isMongoDBConfigured()
     const isConnected = mongoConfigured && clientPromise ? await isMongoDBConnected() : false
     console.log(`[GET] MongoDB check: configured=${mongoConfigured}, clientPromise=${!!clientPromise}, isConnected=${isConnected}`)
+
+    // CRITICAL: If MongoDB is configured but not currently connected, do NOT fall back
+    // to in-memory storage (that causes "sometimes edited dashboard, sometimes empty default").
+    // Instead, return a retryable error so the frontend keeps last-known-good state and retries.
+    if (mongoConfigured && !isConnected) {
+      console.error(`[GET] ❌ MongoDB configured but not connected. Refusing in-memory fallback for ${userEmail}.`)
+      return NextResponse.json(
+        { error: "MongoDB temporarily unavailable" },
+        {
+          status: 503,
+          headers: {
+            'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0',
+            'Surrogate-Control': 'no-store',
+          },
+        }
+      )
+    }
     
     if (mongoConfigured && clientPromise && isConnected) {
       try {
@@ -161,7 +180,7 @@ export async function GET() {
           )
         }
       } catch (error: any) {
-        console.error("[GET] ❌❌❌ MongoDB connection FAILED, falling back to in-memory storage")
+        console.error("[GET] ❌❌❌ MongoDB operation failed. Refusing in-memory fallback to avoid inconsistent state.")
         console.error("[GET] Error details:", error.message || error)
         console.error("[GET] Error stack:", error.stack)
         if (error.message?.includes('MongoParseError') || error.message?.includes('Protocol and host')) {
@@ -174,7 +193,18 @@ export async function GET() {
         if (error.message?.includes('timeout')) {
           console.error("[GET] Connection timeout - check network/firewall settings")
         }
-        // Fall through to in-memory storage only if MongoDB fails
+        return NextResponse.json(
+          { error: "MongoDB temporarily unavailable" },
+          {
+            status: 503,
+            headers: {
+              'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+              'Pragma': 'no-cache',
+              'Expires': '0',
+              'Surrogate-Control': 'no-store',
+            },
+          }
+        )
       }
     } else {
       if (!mongoConfigured) {
@@ -262,6 +292,16 @@ export async function POST(request: NextRequest) {
     const mongoConfigured = isMongoDBConfigured()
     const isConnected = mongoConfigured && clientPromise ? await isMongoDBConnected() : false
     console.log(`[POST] MongoDB check: configured=${mongoConfigured}, clientPromise=${!!clientPromise}, isConnected=${isConnected}`)
+
+    // CRITICAL: If MongoDB is configured but not connected, refuse in-memory fallback
+    // to avoid "sometimes saved, sometimes lost" behavior.
+    if (mongoConfigured && !isConnected) {
+      console.error(`[POST] ❌ MongoDB configured but not connected. Refusing in-memory fallback for ${userEmail}.`)
+      return NextResponse.json(
+        { error: "MongoDB temporarily unavailable" },
+        { status: 503 }
+      )
+    }
     
     if (mongoConfigured && clientPromise && isConnected) {
       try {
@@ -519,7 +559,7 @@ export async function POST(request: NextRequest) {
           )
         }
       } catch (error: any) {
-        console.error("[POST] ❌❌❌ MongoDB connection FAILED, falling back to in-memory storage")
+        console.error("[POST] ❌❌❌ MongoDB operation failed. Refusing in-memory fallback to avoid inconsistent state.")
         console.error("[POST] Error details:", error.message || error)
         console.error("[POST] Error stack:", error.stack)
         if (error.message?.includes('MongoParseError') || error.message?.includes('Protocol and host')) {
@@ -532,8 +572,10 @@ export async function POST(request: NextRequest) {
         if (error.message?.includes('timeout')) {
           console.error("[POST] Connection timeout - check network/firewall settings")
         }
-        // If MongoDB fails, log error but still try in-memory fallback
-        // However, this means data won't persist across deployments
+        return NextResponse.json(
+          { error: "MongoDB temporarily unavailable" },
+          { status: 503 }
+        )
       }
     } else {
       if (!mongoConfigured) {

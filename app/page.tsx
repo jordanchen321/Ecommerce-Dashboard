@@ -38,6 +38,7 @@ export default function Home() {
   const previousEmailRef = useRef<string | null>(null)
   const isLoadingRef = useRef(false) // Prevent duplicate fetches
   const abortControllerRef = useRef<AbortController | null>(null)
+  const hydratedFromCacheRef = useRef(false)
   
   // Default column configuration function
   const getDefaultColumns = (): ColumnConfig[] => [
@@ -90,6 +91,33 @@ export default function Home() {
 
     const currentEmail = session.user.email
 
+    // Hydrate from local cache immediately (prevents "default empty" flashes)
+    // This is only a fallback; the server remains source of truth.
+    const cacheKey = `ecommerceDashboard:${currentEmail}`
+    if (!hydratedFromCacheRef.current) {
+      try {
+        const raw = window.localStorage.getItem(cacheKey)
+        if (raw) {
+          const parsed = JSON.parse(raw) as { products?: Product[]; columnConfig?: ColumnConfig[] | null }
+          if (Array.isArray(parsed.products)) {
+            setProducts(parsed.products)
+            setFilteredProducts(parsed.products)
+            lastSavedProductsRef.current = parsed.products
+          }
+          if (Array.isArray(parsed.columnConfig)) {
+            setColumns(parsed.columnConfig)
+            lastSavedColumnsRef.current = parsed.columnConfig
+          }
+          // Show cached dashboard immediately, but still treat as initial load (don't auto-save)
+          setIsLoaded(true)
+          isInitialLoadRef.current = true
+          hydratedFromCacheRef.current = true
+        }
+      } catch {
+        // ignore cache parse errors
+      }
+    }
+
     // If email changed (different user), reset state
     if (previousEmailRef.current !== null && previousEmailRef.current !== currentEmail) {
       // Cancel any in-flight requests for previous user
@@ -106,8 +134,8 @@ export default function Home() {
       isInitialLoadRef.current = true
     }
 
-    // Skip if we already loaded for this user OR if we're currently loading
-    if ((previousEmailRef.current === currentEmail && isLoaded) || isLoadingRef.current) {
+    // Skip if we're currently loading
+    if (isLoadingRef.current) {
       return
     }
 
@@ -223,9 +251,7 @@ export default function Home() {
             lastSavedProductsRef.current = data.products
           } else {
             console.warn('[Frontend] Invalid products data format received, starting with empty list')
-            setProducts([])
-            setFilteredProducts([])
-            lastSavedProductsRef.current = []
+            // Preserve existing UI state; treat as retryable server hiccup
             // Treat invalid payload as retryable (server hiccup)
             scheduleRetry()
             return
@@ -246,9 +272,20 @@ export default function Home() {
             setColumns(defaultCols)
             lastSavedColumnsRef.current = defaultCols
           }
+
+          // Persist last-known-good dashboard locally for instant reloads
+          try {
+            window.localStorage.setItem(
+              cacheKey,
+              JSON.stringify({ products: data.products, columnConfig: data.columnConfig })
+            )
+          } catch {
+            // ignore storage quota errors
+          }
           
           setIsLoaded(true)
           isInitialLoadRef.current = false
+          hydratedFromCacheRef.current = true
         } else {
           // If unauthorized or error, log and retry without clearing existing data
           console.error(`[Frontend] Failed to load products: ${response.status} ${response.statusText}`)
