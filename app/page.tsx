@@ -14,6 +14,7 @@ export interface Product {
   price: number
   productId: string
   quantity: number
+  image?: string // Image URL or base64 data URL
 }
 
 export default function Home() {

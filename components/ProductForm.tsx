@@ -14,6 +14,8 @@ export default function ProductForm({ onAdd }: ProductFormProps) {
   const [price, setPrice] = useState("")
   const [productId, setProductId] = useState("")
   const [quantity, setQuantity] = useState("")
+  const [imageUrl, setImageUrl] = useState("")
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
@@ -41,6 +43,7 @@ export default function ProductForm({ onAdd }: ProductFormProps) {
       price: priceNum,
       productId,
       quantity: quantityNum,
+      image: imagePreview || imageUrl || undefined,
     })
 
     // Reset form
@@ -48,6 +51,8 @@ export default function ProductForm({ onAdd }: ProductFormProps) {
     setPrice("")
     setProductId("")
     setQuantity("")
+    setImageUrl("")
+    setImagePreview(null)
   }
 
   return (
@@ -109,6 +114,73 @@ export default function ProductForm({ onAdd }: ProductFormProps) {
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           placeholder="1"
         />
+      </div>
+
+      <div>
+        <label htmlFor="image" className="block text-sm font-medium text-gray-700 mb-1">
+          {t('form.image')} ({t('form.optional')})
+        </label>
+        <div className="space-y-2">
+          <input
+            type="file"
+            id="imageFile"
+            accept="image/*"
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (file) {
+                // Limit file size to 5MB
+                if (file.size > 5 * 1024 * 1024) {
+                  alert(t('form.error.imageTooLarge') || 'Image size must be less than 5MB')
+                  e.target.value = ''
+                  return
+                }
+                const reader = new FileReader()
+                reader.onloadend = () => {
+                  setImagePreview(reader.result as string)
+                  setImageUrl("") // Clear URL if file is selected
+                }
+                reader.readAsDataURL(file)
+              }
+            }}
+            className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+          />
+          <div className="text-xs text-gray-500">
+            {t('form.or')}
+          </div>
+          <input
+            type="url"
+            id="imageUrl"
+            value={imageUrl}
+            onChange={(e) => {
+              setImageUrl(e.target.value)
+              setImagePreview(null) // Clear preview if URL is entered
+            }}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            placeholder={t('form.imageUrlPlaceholder') || 'Paste image URL'}
+          />
+        </div>
+        {imagePreview && (
+          <div className="mt-2">
+            <img
+              src={imagePreview}
+              alt="Preview"
+              className="w-24 h-24 object-cover rounded-lg border border-gray-300"
+            />
+          </div>
+        )}
+        {imageUrl && !imagePreview && (
+          <div className="mt-2">
+            <img
+              src={imageUrl}
+              alt="Preview"
+              className="w-24 h-24 object-cover rounded-lg border border-gray-300"
+              onError={() => {
+                setImageUrl("")
+                alert(t('form.error.invalidImageUrl') || 'Invalid image URL')
+              }}
+            />
+          </div>
+        )}
       </div>
 
       <button

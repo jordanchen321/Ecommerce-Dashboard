@@ -18,7 +18,14 @@ interface Translations {
   'form.error.allFields': string
   'form.error.validPrice': string
   'form.error.validQuantity': string
+  'form.image': string
+  'form.optional': string
+  'form.or': string
+  'form.imageUrlPlaceholder': string
+  'form.error.imageTooLarge': string
+  'form.error.invalidImageUrl': string
   'table.title': string
+  'table.image': string
   'table.productId': string
   'table.name': string
   'table.price': string
@@ -50,7 +57,14 @@ export const translations: Record<Language, Translations> = {
     'form.error.allFields': 'Please fill in all fields',
     'form.error.validPrice': 'Please enter a valid price',
     'form.error.validQuantity': 'Please enter a valid quantity',
+    'form.image': 'Product Image',
+    'form.optional': 'Optional',
+    'form.or': 'or',
+    'form.imageUrlPlaceholder': 'Paste image URL',
+    'form.error.imageTooLarge': 'Image size must be less than 5MB',
+    'form.error.invalidImageUrl': 'Invalid image URL',
     'table.title': 'Products',
+    'table.image': 'Image',
     'table.productId': 'Product ID',
     'table.name': 'Name',
     'table.price': 'Price',
@@ -80,7 +94,14 @@ export const translations: Record<Language, Translations> = {
     'form.error.allFields': '请填写所有字段',
     'form.error.validPrice': '请输入有效价格',
     'form.error.validQuantity': '请输入有效数量',
+    'form.image': '产品图片',
+    'form.optional': '可选',
+    'form.or': '或',
+    'form.imageUrlPlaceholder': '粘贴图片链接',
+    'form.error.imageTooLarge': '图片大小必须小于5MB',
+    'form.error.invalidImageUrl': '无效的图片链接',
     'table.title': '产品',
+    'table.image': '图片',
     'table.productId': '产品ID',
     'table.name': '名称',
     'table.price': '价格',

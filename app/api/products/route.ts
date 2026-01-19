@@ -13,6 +13,7 @@ export interface Product {
   price: number
   productId: string
   quantity: number
+  image?: string // Image URL or base64 data URL
 }
 
 // Fallback in-memory storage (only used if MongoDB is not configured)
