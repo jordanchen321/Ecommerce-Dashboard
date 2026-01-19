@@ -20,7 +20,7 @@ export interface Product {
   quantity: number
   quantitySet?: boolean
   image?: string // Image URL or base64 data URL
-  // Allow additional fields from Firestore that may not be in the interface
+  // Allow additional fields from MongoDB that may not be in the interface
   [key: string]: any
 }
 
@@ -238,13 +238,13 @@ export default function Home() {
             return
           }
           
-          // Load products from Firestore (same pattern as columns)
-          // Products are stored in Firestore and persist across all devices and sessions
+          // Load products from MongoDB (same pattern as columns)
+          // Products are stored in MongoDB and persist across all devices and sessions
           if (Array.isArray(data.products)) {
             if (data.products.length > 0) {
-              console.log(`[Frontend] ✓ Loaded ${data.products.length} products from Firestore (persistent across devices)`)
+              console.log(`[Frontend] ✓ Loaded ${data.products.length} products from MongoDB (persistent across devices)`)
             } else {
-              console.log(`[Frontend] No products found in Firestore, starting with empty list (will be saved on first product added)`)
+              console.log(`[Frontend] No products found in MongoDB, starting with empty list (will be saved on first product added)`)
             }
             setProducts(data.products)
             setFilteredProducts(data.products)
@@ -258,9 +258,9 @@ export default function Home() {
           }
           
           // Load column configuration if available (same pattern as products)
-          // Column config is stored in Firestore and persists across all devices and sessions
+          // Column config is stored in MongoDB and persists across all devices and sessions
           if (Array.isArray(data.columnConfig)) {
-            console.log(`[Frontend] ✓ Loaded ${data.columnConfig.length} column configurations from Firestore (persistent across devices)`)
+            console.log(`[Frontend] ✓ Loaded ${data.columnConfig.length} column configurations from MongoDB (persistent across devices)`)
             console.log(`[Frontend] Column config:`, data.columnConfig.map((c: ColumnConfig) => ({ field: c.field, label: c.label, visible: c.visible, isCustom: c.isCustom })))
             // Use exactly what is stored, even if empty, so deletions persist
             setColumns(data.columnConfig as ColumnConfig[])
@@ -268,7 +268,7 @@ export default function Home() {
           } else {
             // Use default columns if no config exists (first time user)
             const defaultCols = getDefaultColumns()
-            console.log(`[Frontend] No column config found in Firestore, using default columns (will be saved on first change)`)
+            console.log(`[Frontend] No column config found in MongoDB, using default columns (will be saved on first change)`)
             setColumns(defaultCols)
             lastSavedColumnsRef.current = defaultCols
           }
@@ -376,21 +376,21 @@ export default function Home() {
           
           // Update last saved reference only on success
           lastSavedProductsRef.current = products
-          if (data.storage === 'firestore') {
-            console.log(`[Frontend] ✓ Successfully saved ${products.length} products to Firestore`)
+          if (data.storage === 'mongodb') {
+            console.log(`[Frontend] ✓ Successfully saved ${products.length} products to MongoDB`)
           } else if (data.storage === 'memory') {
-            console.warn('[Frontend] ⚠ Products saved to memory only (Firebase not configured) - data will be lost on server restart')
+            console.warn('[Frontend] ⚠ Products saved to memory only (MongoDB not configured) - data will be lost on server restart')
           }
         } else {
           const errorData = await response.json().catch(() => ({}))
           console.error(`[Frontend] Failed to save products: ${response.status} ${response.statusText}`, errorData)
           // Note: We don't clear products on save error - preserve local state
-          // The server-side data in Firestore remains unchanged
+          // The server-side data in MongoDB remains unchanged
         }
       } catch (error) {
         console.error('[Frontend] Error saving products:', error)
         // On error, keep local products - don't clear them
-        // Firestore still has the last successfully saved version
+        // MongoDB still has the last successfully saved version
       }
     }, 500) // Wait 500ms after last change before saving
 
@@ -407,7 +407,7 @@ export default function Home() {
     const timeoutId = setTimeout(async () => {
       try {
         const customCols = columns.filter(col => col.isCustom)
-        console.log(`[Frontend] Saving column configuration to Firestore: ${columns.length} total columns (${customCols.length} custom)`)
+        console.log(`[Frontend] Saving column configuration to MongoDB: ${columns.length} total columns (${customCols.length} custom)`)
         console.log(`[Frontend] Custom columns:`, customCols.map(c => ({ field: c.field, label: c.label, type: c.type })))
         
         const response = await fetch('/api/products', {
@@ -426,7 +426,7 @@ export default function Home() {
           
           // Verify server response includes document structure confirmation
           if (data.documentStructure) {
-            console.log(`[Frontend] ✓ Server confirmed Firestore document structure:`)
+            console.log(`[Frontend] ✓ Server confirmed MongoDB document structure:`)
             console.log(`[Frontend]   - gmail: "${data.documentStructure.gmail}"`)
             console.log(`[Frontend]   - products: ${data.documentStructure.productsCount} items`)
             console.log(`[Frontend]   - columnConfig: ${data.documentStructure.columnConfigCount} columns`)
@@ -437,14 +437,14 @@ export default function Home() {
           if (data.columnConfig && Array.isArray(data.columnConfig)) {
             lastSavedColumnsRef.current = data.columnConfig as ColumnConfig[]
             const savedCustomCols = (data.columnConfig as ColumnConfig[]).filter(c => c.isCustom)
-            console.log(`[Frontend] ✓✓✓ Successfully saved column configuration to Firestore (${data.columnConfig.length} total, ${savedCustomCols.length} custom)`)
+            console.log(`[Frontend] ✓✓✓ Successfully saved column configuration to MongoDB (${data.columnConfig.length} total, ${savedCustomCols.length} custom)`)
             console.log(`[Frontend] Column config synced:`, (data.columnConfig as ColumnConfig[]).map((c: ColumnConfig) => ({ field: c.field, label: c.label, visible: c.visible, isCustom: c.isCustom })))
             
-            // Verify all three fields are confirmed in Firestore
+            // Verify all three fields are confirmed in MongoDB
             if (data.documentStructure?.hasAllFields) {
-              console.log(`[Frontend] ✓✓✓ Firestore document verified: gmail, products, and columnConfig all saved successfully!`)
+              console.log(`[Frontend] ✓✓✓ MongoDB document verified: gmail, products, and columnConfig all saved successfully!`)
             } else {
-              console.warn(`[Frontend] ⚠ Server response indicates some fields may be missing in Firestore`)
+              console.warn(`[Frontend] ⚠ Server response indicates some fields may be missing in MongoDB`)
             }
           } else {
             lastSavedColumnsRef.current = columns

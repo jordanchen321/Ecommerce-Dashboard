@@ -6,55 +6,37 @@ export const revalidate = 0
 
 /**
  * Diagnostic endpoint to check environment variable configuration
- * This helps diagnose why Firebase might not be working on Vercel
+ * This helps diagnose why MongoDB might not be working on Vercel
  */
 export async function GET() {
   try {
-    const firebaseProjectIdSet = !!process.env.FIREBASE_PROJECT_ID
-    const firebasePrivateKeySet = !!process.env.FIREBASE_PRIVATE_KEY
-    const firebaseClientEmailSet = !!process.env.FIREBASE_CLIENT_EMAIL
-    const firebaseConfigured = firebaseProjectIdSet && firebasePrivateKeySet && firebaseClientEmailSet
-    
+    const mongoUriSet = !!process.env.MONGODB_URI
     const nextAuthUrlSet = !!process.env.NEXTAUTH_URL
     const nextAuthSecretSet = !!process.env.NEXTAUTH_SECRET
     const googleClientIdSet = !!process.env.GOOGLE_CLIENT_ID
     const googleClientSecretSet = !!process.env.GOOGLE_CLIENT_SECRET
 
-    // Mask Firebase credentials for security
-    let firebaseProjectIdPreview = "Not set"
-    if (firebaseProjectIdSet && process.env.FIREBASE_PROJECT_ID) {
-      const projectId = process.env.FIREBASE_PROJECT_ID
-      firebaseProjectIdPreview = projectId.length > 20 ? `${projectId.substring(0, 20)}...` : projectId
+    // Mask MONGODB_URI for security (show only first 20 chars and last 10 chars)
+    let mongoUriPreview = "Not set"
+    if (mongoUriSet && process.env.MONGODB_URI) {
+      const uri = process.env.MONGODB_URI
+      if (uri.length > 30) {
+        mongoUriPreview = `${uri.substring(0, 20)}...${uri.substring(uri.length - 10)}`
+      } else {
+        mongoUriPreview = `${uri.substring(0, 10)}...`
+      }
     }
 
     return NextResponse.json({
       environment: process.env.NODE_ENV || "unknown",
       vercel: !!process.env.VERCEL,
       environmentVariables: {
-        FIREBASE_PROJECT_ID: {
-          set: firebaseProjectIdSet,
-          preview: firebaseProjectIdPreview,
-          note: firebaseProjectIdSet 
-            ? "✓ Firebase Project ID is configured" 
-            : "❌ FIREBASE_PROJECT_ID is NOT set"
-        },
-        FIREBASE_PRIVATE_KEY: {
-          set: firebasePrivateKeySet,
-          note: firebasePrivateKeySet 
-            ? "✓ Firebase Private Key is configured" 
-            : "❌ FIREBASE_PRIVATE_KEY is NOT set"
-        },
-        FIREBASE_CLIENT_EMAIL: {
-          set: firebaseClientEmailSet,
-          note: firebaseClientEmailSet 
-            ? "✓ Firebase Client Email is configured" 
-            : "❌ FIREBASE_CLIENT_EMAIL is NOT set"
-        },
-        FIREBASE_CONFIGURED: {
-          set: firebaseConfigured,
-          note: firebaseConfigured 
-            ? "✓✓✓ All Firebase credentials are set - Firestore should work" 
-            : "❌❌❌ Firebase is NOT fully configured - data will save to memory only"
+        MONGODB_URI: {
+          set: mongoUriSet,
+          preview: mongoUriPreview,
+          note: mongoUriSet 
+            ? "✓ MongoDB URI is configured" 
+            : "❌ MONGODB_URI is NOT set - data will save to memory only"
         },
         NEXTAUTH_URL: {
           set: nextAuthUrlSet,
@@ -73,15 +55,13 @@ export async function GET() {
           note: googleClientSecretSet ? "✓ Set" : "❌ Not set"
         },
       },
-      instructions: !firebaseConfigured ? {
+      instructions: !mongoUriSet ? {
         step1: "Go to Vercel Dashboard → Your Project → Settings → Environment Variables",
-        step2: "Add FIREBASE_PROJECT_ID: Your Firebase project ID",
-        step3: "Add FIREBASE_PRIVATE_KEY: Your service account private key (with \\n characters)",
-        step4: "Add FIREBASE_CLIENT_EMAIL: Your service account client email",
-        step5: "Select ALL environments (Production, Preview, Development)",
-        step6: "Click 'Save'",
-        step7: "Go to Deployments → Click '...' on latest deployment → Redeploy",
-        step8: "Wait for redeployment to complete, then refresh this page"
+        step2: "Click 'Add New' and enter: Key: MONGODB_URI, Value: your-mongodb-connection-string",
+        step3: "Select ALL environments (Production, Preview, Development)",
+        step4: "Click 'Save'",
+        step5: "Go to Deployments → Click '...' on latest deployment → Redeploy",
+        step6: "Wait for redeployment to complete, then refresh this page"
       } : null,
       timestamp: new Date().toISOString(),
     }, {

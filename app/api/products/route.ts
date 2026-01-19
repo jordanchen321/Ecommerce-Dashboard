@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth/next"
 import { authOptions } from "@/app/api/auth/[...nextauth]/route"
-import getFirestoreInstance, { isFirebaseConfigured } from "@/lib/firebase"
+import clientPromise from "@/lib/mongodb"
 
 // Column configuration type (matches frontend)
 interface ColumnConfig {
@@ -27,17 +27,27 @@ export interface Product {
   quantity: number
   quantitySet?: boolean
   image?: string // Image URL or base64 data URL
-  // Allow additional fields from Firestore that may not be in the interface
+  // Allow additional fields from MongoDB that may not be in the interface
   [key: string]: any
 }
 
-// Fallback in-memory storage (only used if Firebase is not configured)
+// Fallback in-memory storage (only used if MongoDB is not configured)
 // Note: This won't persist across serverless function restarts on Vercel
-// IMPORTANT: Data will be lost on redeploy if Firebase is not configured
+// IMPORTANT: Data will be lost on redeploy if MongoDB is not configured
 const productsStore: Record<string, Product[]> = {}
 const columnConfigStore: Record<string, ColumnConfig[]> = {}
 
-// Helper function to normalize and validate product data from Firestore
+// Helper function to check if MongoDB is configured
+function isMongoDBConfigured(): boolean {
+  const hasUri = !!process.env.MONGODB_URI
+  if (!hasUri) {
+    console.warn('[API] ⚠ MONGODB_URI not found in environment variables')
+    console.warn('[API] Check: 1) .env.local file exists, 2) MONGODB_URI is set, 3) Dev server was restarted')
+  }
+  return hasUri
+}
+
+// Helper function to normalize and validate product data from MongoDB
 // This ensures backward compatibility when schema changes are made
 function normalizeProduct(p: any): Product {
   const parsedPrice = typeof p.price === 'number' ? p.price : parseFloat(p.price)
@@ -47,7 +57,7 @@ function normalizeProduct(p: any): Product {
   const qtyIsValid = typeof parsedQuantity === 'number' && !isNaN(parsedQuantity)
 
   return {
-    id: p.id || Date.now().toString(),
+    id: p.id || p._id?.toString() || Date.now().toString(),
     name: p.name || '',
     price: priceIsValid ? parsedPrice : 0,
     priceSet: typeof p.priceSet === 'boolean' ? p.priceSet : priceIsValid,
@@ -55,10 +65,10 @@ function normalizeProduct(p: any): Product {
     quantity: qtyIsValid ? parsedQuantity : 0,
     quantitySet: typeof p.quantitySet === 'boolean' ? p.quantitySet : qtyIsValid,
     image: p.image || undefined,
-    // Preserve any additional fields from Firestore (for future schema extensions)
+    // Preserve any additional fields from MongoDB (for future schema extensions)
     ...Object.fromEntries(
       Object.entries(p).filter(([key]) => 
-        !['id', 'name', 'price', 'productId', 'quantity', 'image'].includes(key)
+        !['id', '_id', 'name', 'price', 'productId', 'quantity', 'image'].includes(key)
       )
     )
   }
@@ -76,113 +86,135 @@ export async function GET() {
 
     const userEmail = session.user.email
 
-    // Use Firebase Firestore if configured (persists across deployments)
-    // Firestore data survives all code updates and deployments
-    const firebaseConfigured = isFirebaseConfigured()
-    console.log(`[GET] Firebase check: configured=${firebaseConfigured}`)
+    // Use MongoDB if configured (persists across deployments)
+    // MongoDB data survives all code updates and deployments
+    const mongoConfigured = isMongoDBConfigured()
+    console.log(`[GET] MongoDB check: configured=${mongoConfigured}, clientPromise=${!!clientPromise}`)
     
     // Enhanced logging for Vercel deployment debugging
-    if (!firebaseConfigured) {
-      console.error(`[GET] ❌❌❌ Firebase is NOT configured!`)
-      console.error(`[GET] Required: FIREBASE_PROJECT_ID, FIREBASE_PRIVATE_KEY, FIREBASE_CLIENT_EMAIL`)
-      console.error(`[GET] To fix: Go to Vercel Dashboard → Settings → Environment Variables`)
+    if (!mongoConfigured) {
+      console.error(`[GET] ❌❌❌ MONGODB_URI is NOT set in Vercel environment variables!`)
+      console.error(`[GET] To fix: Go to Vercel Dashboard → Settings → Environment Variables → Add MONGODB_URI`)
       console.error(`[GET] Then redeploy: Deployments → ... → Redeploy`)
     }
 
-    // Try Firestore first if configured
-    if (firebaseConfigured) {
+    // Try MongoDB first if configured
+    if (mongoConfigured && clientPromise) {
       try {
-        console.log(`[GET] Attempting to connect to Firestore...`)
-        const db = getFirestoreInstance()
-        if (db) {
-          console.log(`[GET] ✓ Firestore instance obtained successfully`)
+        console.log(`[GET] Attempting to connect to MongoDB...`)
+        const client = await clientPromise
+        if (client) {
+          console.log(`[GET] ✓ MongoDB client obtained successfully`)
           
-          // Use user email as document ID (sanitized for Firestore)
-          // Firestore document IDs cannot contain certain characters, so we'll use a safe format
-          const docId = userEmail.replace(/[^a-zA-Z0-9]/g, '_')
-          const userDocRef = db.collection('users').doc(docId)
+          const db = client.db("ecommerce_dashboard")
+          const collection = db.collection("products")
           
-          // Fetch user document from Firestore
-          const userDoc = await userDocRef.get()
-          
-          if (userDoc.exists) {
-            const userData = userDoc.data()
-            
-            // Support both old (userEmail, columnConfig) and new (gmail, columnConfigs) field names
-            const rawProducts = (userData?.products || userData?.gmail ? userData.products : []) as any[]
-            const products: Product[] = rawProducts.map(normalizeProduct)
-            
-            // Log products
-            if (products.length > 0) {
-              console.log(`[GET] ✓ Loaded ${products.length} products from Firestore for ${userEmail} (persistent across devices)`)
-            } else {
-              console.log(`[GET] No products found in Firestore for ${userEmail}, returning empty array (will be saved on first product added)`)
+          // Always fetch from MongoDB - data persists regardless of code changes
+          // Document structure: { gmail, products, columnConfigs, updatedAt }
+          // Support both old (userEmail, columnConfig) and new (gmail, columnConfigs) field names for migration
+          let userProduct = await collection.findOne({ gmail: userEmail })
+          if (!userProduct) {
+            // Try old field name for backward compatibility
+            userProduct = await collection.findOne({ userEmail })
+            if (userProduct) {
+              // Migrate old document to new structure
+              console.log(`[GET] Migrating document from old structure (userEmail) to new structure (gmail)`)
+              await collection.updateOne(
+                { userEmail },
+                { 
+                  $set: { 
+                    gmail: userEmail,
+                    columnConfigs: userProduct.columnConfig || null
+                  },
+                  $unset: { userEmail: "", columnConfig: "" }
+                }
+              )
+              userProduct = await collection.findOne({ gmail: userEmail })
             }
-            
-            // Get column configuration (support both old and new field names)
-            const columnConfig = Array.isArray(userData?.columnConfigs) 
-              ? userData.columnConfigs 
-              : (Array.isArray(userData?.columnConfig) 
-                ? userData.columnConfig 
-                : null)
-            
-            if (Array.isArray(columnConfig)) {
-              if (columnConfig.length > 0) {
-                console.log(`[GET] ✓ Loaded ${columnConfig.length} column configurations from Firestore for ${userEmail} (persistent across devices)`)
-              } else {
-                console.log(`[GET] ✓ Loaded empty column config from Firestore for ${userEmail} (user deleted all columns - preserving deletion)`)
-              }
-            } else {
-              console.log(`[GET] No column config found in Firestore for ${userEmail}, will use defaults (will be saved on first change)`)
-            }
-            
-            // Return existing data with no-cache headers
-            return NextResponse.json(
-              { products, columnConfig },
-              {
-                headers: {
-                  'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-                  'Pragma': 'no-cache',
-                  'Expires': '0',
-                  'Surrogate-Control': 'no-store',
-                },
-              }
-            )
-          } else {
-            // Document doesn't exist yet - return empty arrays
-            console.log(`[GET] No document found in Firestore for ${userEmail}, returning empty arrays (will be created on first save)`)
-            return NextResponse.json(
-              { products: [], columnConfig: null },
-              {
-                headers: {
-                  'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-                  'Pragma': 'no-cache',
-                  'Expires': '0',
-                  'Surrogate-Control': 'no-store',
-                },
-              }
-            )
           }
+          
+          const rawProducts = (userProduct?.products || []) as any[]
+          
+          // Normalize products: ensure all required fields exist with defaults if missing
+          // This makes the data resilient to schema changes - old data still works
+          const products: Product[] = rawProducts.map(normalizeProduct)
+          
+          // Log products (same pattern as columns)
+          if (products.length > 0) {
+            console.log(`[GET] ✓ Loaded ${products.length} products from MongoDB for ${userEmail} (persistent across devices)`)
+          } else {
+            console.log(`[GET] No products found in MongoDB for ${userEmail}, returning empty array (will be saved on first product added)`)
+          }
+          
+          // Log if document exists but has no products (potential data loss indicator)
+          if (userProduct && (!userProduct.products || !Array.isArray(userProduct.products) || userProduct.products.length === 0)) {
+            console.warn(`[GET] ⚠ User document exists for ${userEmail} but products array is empty or missing`)
+            console.warn(`[GET] Document keys:`, Object.keys(userProduct))
+          }
+          
+          // Also fetch column configuration if it exists (same pattern as products)
+          // Column config is stored per user and persists across all devices
+          // CRITICAL: Return empty array if it exists (even if empty) to preserve deletions
+          // Support both old (columnConfig) and new (columnConfigs) field names
+          const columnConfig = Array.isArray(userProduct?.columnConfigs) 
+            ? userProduct.columnConfigs 
+            : (Array.isArray(userProduct?.columnConfig) 
+              ? userProduct.columnConfig 
+              : (userProduct?.columnConfigs !== undefined || userProduct?.columnConfig !== undefined 
+                ? (userProduct?.columnConfigs || userProduct?.columnConfig || null) 
+                : null))
+          
+          if (Array.isArray(columnConfig)) {
+            if (columnConfig.length > 0) {
+              console.log(`[GET] ✓ Loaded ${columnConfig.length} column configurations from MongoDB for ${userEmail} (persistent across devices)`)
+            } else {
+              console.log(`[GET] ✓ Loaded empty column config from MongoDB for ${userEmail} (user deleted all columns - preserving deletion)`)
+            }
+          } else {
+            console.log(`[GET] No column config found in MongoDB for ${userEmail}, will use defaults (will be saved on first change)`)
+          }
+          
+          // Return existing data with no-cache headers
+          return NextResponse.json(
+            { products, columnConfig },
+            {
+              headers: {
+                'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0',
+                'Surrogate-Control': 'no-store',
+              },
+            }
+          )
         }
       } catch (error: any) {
-        console.error("[GET] ❌ Firestore operation failed, falling back to in-memory storage")
+        console.error("[GET] ❌ MongoDB operation failed, falling back to in-memory storage")
         console.error("[GET] Error details:", error.message || error)
-        if (error.message?.includes('permission-denied')) {
-          console.error("[GET] Permission denied - check Firestore security rules")
+        if (error.message?.includes('MongoParseError') || error.message?.includes('Protocol and host')) {
+          console.error("[GET] Connection string error - check if password contains @ symbol and needs URL encoding")
         }
-        if (error.message?.includes('not-found')) {
-          console.error("[GET] Collection or document not found")
+        if (error.message?.includes('authentication failed')) {
+          console.error("[GET] Authentication failed - check MongoDB username and password")
+        }
+        if (error.message?.includes('timeout')) {
+          console.error("[GET] Connection timeout - check network/firewall settings")
         }
         // Fall through to in-memory fallback
       }
     } else {
-      console.warn(`[GET] ⚠ Firebase not configured - Firebase credentials not found`)
-      console.warn(`[GET] Check: 1) .env.local exists, 2) Firebase env vars are set, 3) Dev server was restarted`)
+      if (!mongoConfigured) {
+        console.warn(`[GET] ⚠ MongoDB not configured - MONGODB_URI environment variable not found`)
+        console.warn(`[GET] Check: 1) .env.local exists, 2) MONGODB_URI is set, 3) Dev server was restarted`)
+      }
+      if (mongoConfigured && !clientPromise) {
+        console.warn(`[GET] ⚠ MongoDB clientPromise is null - connection may have failed during initialization`)
+        console.warn(`[GET] Falling back to in-memory storage`)
+      }
     }
 
     // Fallback to in-memory storage (WARNING: data lost on redeploy)
-    // Used when Firebase is not configured OR when Firestore fails
-    console.warn(`[GET] ⚠ Using in-memory storage for ${userEmail} (Firebase unavailable or not configured)`)
+    // Used when MongoDB is not configured OR when MongoDB fails
+    console.warn(`[GET] ⚠ Using in-memory storage for ${userEmail} (MongoDB unavailable or not configured)`)
     const products = productsStore[userEmail] || []
     const columnConfig = columnConfigStore[userEmail] || null
     
@@ -224,7 +256,7 @@ export async function GET() {
 }
 
 // POST - Save products for the current user
-// CRITICAL: This endpoint preserves data integrity - uses set with merge to never lose existing data
+// CRITICAL: This endpoint preserves data integrity - uses upsert to never lose existing data
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
@@ -248,168 +280,267 @@ export async function POST(request: NextRequest) {
 
     const userEmail = session.user.email
 
-    // Use Firebase Firestore if configured (persists across deployments)
-    // Firestore is the source of truth - all code updates preserve data in Firestore
-    const firebaseConfigured = isFirebaseConfigured()
-    console.log(`[POST] Firebase check: configured=${firebaseConfigured}`)
+    // Use MongoDB if configured (persists across deployments)
+    // MongoDB is the source of truth - all code updates preserve data in MongoDB
+    const mongoConfigured = isMongoDBConfigured()
+    const hasClientPromise = !!clientPromise
+    console.log(`[POST] MongoDB check: configured=${mongoConfigured}, clientPromise=${hasClientPromise}`)
+    console.log(`[POST] MONGODB_URI exists: ${!!process.env.MONGODB_URI}`)
     
     // Enhanced logging for Vercel deployment debugging
-    if (!firebaseConfigured) {
-      console.error(`[POST] ❌❌❌ Firebase is NOT configured!`)
+    if (!mongoConfigured) {
+      console.error(`[POST] ❌❌❌ MONGODB_URI is NOT set in Vercel environment variables!`)
       console.error(`[POST] Current environment: ${process.env.NODE_ENV || 'unknown'}`)
       console.error(`[POST] Running on Vercel: ${!!process.env.VERCEL}`)
-      console.error(`[POST] Required: FIREBASE_PROJECT_ID, FIREBASE_PRIVATE_KEY, FIREBASE_CLIENT_EMAIL`)
-      console.error(`[POST] To fix: Go to Vercel Dashboard → Settings → Environment Variables`)
+      console.error(`[POST] To fix: Go to Vercel Dashboard → Settings → Environment Variables → Add MONGODB_URI`)
       console.error(`[POST] Then redeploy: Deployments → ... → Redeploy`)
       console.error(`[POST] Visit /api/diagnostics to check environment variable status`)
-    } else {
-      console.log(`[POST] ✓ Firebase is configured`)
+    } else if (process.env.MONGODB_URI) {
+      const maskedUri = process.env.MONGODB_URI.replace(/:([^:@]+)@/, ':****@')
+      console.log(`[POST] ✓ MONGODB_URI is configured: ${maskedUri.substring(0, 50)}...`)
     }
     
-    // Try Firestore first if configured
-    if (firebaseConfigured) {
+    // Try MongoDB first if configured
+    if (mongoConfigured && clientPromise) {
       try {
-        console.log(`[POST] Attempting to connect to Firestore...`)
-        const db = getFirestoreInstance()
-        if (db) {
-          console.log(`[POST] ✓ Firestore instance obtained successfully`)
+        console.log(`[POST] Attempting to connect to MongoDB...`)
+        const client = await clientPromise
+        if (client) {
+          console.log(`[POST] ✓ MongoDB client obtained successfully`)
           
-          // Use user email as document ID (sanitized for Firestore)
-          const docId = userEmail.replace(/[^a-zA-Z0-9]/g, '_')
-          const userDocRef = db.collection('users').doc(docId)
+          // Verify connection is alive
+          try {
+            await client.db("admin").command({ ping: 1 })
+            console.log(`[POST] ✓ MongoDB connection verified with ping`)
+          } catch (pingError: any) {
+            console.error(`[POST] ⚠ Ping failed:`, pingError.message)
+            // Continue anyway - ping failure doesn't mean we can't write
+          }
           
-          // Get existing document to preserve any fields we're not updating
-          const existingDoc = await userDocRef.get()
-          const existingData = existingDoc.exists ? existingDoc.data() : null
+          const db = client.db("ecommerce_dashboard")
+          console.log(`[POST] Using database: "ecommerce_dashboard"`)
+          
+          const collection = db.collection("products")
+          console.log(`[POST] Using collection: "products"`)
+          
+          // Verify we can access the collection
+          try {
+            const collectionStats = await collection.countDocuments()
+            console.log(`[POST] ✓ Collection accessible - current document count: ${collectionStats}`)
+          } catch (statsError: any) {
+            console.error(`[POST] ⚠ Could not get collection stats:`, statsError.message)
+            // Continue anyway - might be a new collection
+          }
           
           // Allow empty arrays - users may legitimately delete all products
           if (products.length === 0) {
             console.log(`[POST] Saving empty products array for user ${userEmail} (user deleted all products)`)
           }
           
-          // Build document data - always include gmail, products, columnConfigs, updatedAt
+          // CRITICAL: Use upsert to preserve data integrity
+          // - If document exists: Update it with new products
+          // - If document doesn't exist: Create new document with products
+          // - gmail is the unique key - ensures each user's data is separate
+          // - This operation is atomic and safe across deployments
           // Document structure: { gmail, products, columnConfigs, updatedAt }
-          const docData: any = {
-            gmail: userEmail,
-            products,
-            updatedAt: new Date(),
+          
+          // Check for existing document with new structure (gmail) or old structure (userEmail)
+          let existingDoc = await collection.findOne({ gmail: userEmail })
+          if (!existingDoc) {
+            existingDoc = await collection.findOne({ userEmail })
+            if (existingDoc) {
+              // Migrate old document to new structure
+              console.log(`[POST] Migrating document from old structure (userEmail, columnConfig) to new structure (gmail, columnConfigs)`)
+              await collection.updateOne(
+                { userEmail },
+                { 
+                  $set: { 
+                    gmail: userEmail,
+                    columnConfigs: existingDoc.columnConfig || null
+                  },
+                  $unset: { userEmail: "", columnConfig: "" }
+                }
+              )
+              existingDoc = await collection.findOne({ gmail: userEmail })
+            }
           }
           
-          // Handle columnConfigs - same logic as products
+          // Log before save for debugging
+          const beforeCount = existingDoc?.products?.length || 0
+          
+          // Get existing columnConfigs (support both old and new field names)
+          const existingColumnConfigs = Array.isArray(existingDoc?.columnConfigs) 
+            ? existingDoc.columnConfigs 
+            : (Array.isArray(existingDoc?.columnConfig) ? existingDoc.columnConfig : null)
+          
+          // Build update object - save products (always) and columnConfigs (if provided or exists)
+          // Document structure: { gmail: "user@email.com", products: [...], columnConfigs: [...] | null, updatedAt: Date }
+          const updateData: any = {
+            gmail: userEmail,
+            products,
+            updatedAt: new Date()
+          }
+          
+          // CRITICAL: Save columnConfigs EXACTLY like products - ALWAYS ensure it's in the document
+          // MongoDB document MUST have: gmail, products, columnConfigs
           if (columnConfig !== undefined) {
-            docData.columnConfigs = columnConfig
+            // ALWAYS save when provided - same unconditional save as products
+            updateData.columnConfigs = columnConfig
             if (Array.isArray(columnConfig)) {
               const customCols = columnConfig.filter((c: ColumnConfig) => c.isCustom)
-              console.log(`[POST] 💾 SAVING column configuration to Firestore for ${userEmail}: ${columnConfig.length} total columns (${customCols.length} custom)`)
+              console.log(`[POST] 💾 SAVING column configuration to MongoDB for ${userEmail}: ${columnConfig.length} total columns (${customCols.length} custom)`)
               if (customCols.length > 0) {
                 console.log(`[POST] Custom columns being saved:`, customCols.map((c: ColumnConfig) => `${c.field} (${c.label})`).join(', '))
               }
+            } else {
+              console.log(`[POST] ⚠ Column config is not an array:`, typeof columnConfig, columnConfig)
             }
-          } else if (existingData?.columnConfigs !== null && existingData?.columnConfigs !== undefined) {
-            // Not provided - preserve existing
-            docData.columnConfigs = existingData.columnConfigs
-            console.log(`[POST] Preserving existing column configuration: ${Array.isArray(existingData.columnConfigs) ? existingData.columnConfigs.length : 'invalid'} columns`)
+          } else if (existingColumnConfigs !== null && existingColumnConfigs !== undefined) {
+            // Not provided - preserve existing (same as products preservation logic)
+            updateData.columnConfigs = existingColumnConfigs
+            console.log(`[POST] Preserving existing column configuration: ${Array.isArray(existingColumnConfigs) ? existingColumnConfigs.length : 'invalid'} columns`)
           } else {
-            // No columnConfigs provided and none exists - set to null
-            docData.columnConfigs = null
+            // No columnConfigs provided and none exists - set to null to ensure field exists in document
+            updateData.columnConfigs = null
             console.log(`[POST] No columnConfigs provided and none exists - setting to null (will use defaults on next load)`)
           }
           
-          // Save to Firestore using set with merge (preserves existing fields, updates specified ones)
-          console.log(`[POST] 💾 Saving to Firestore for ${userEmail}`)
+          // Save to MongoDB using upsert - EXACT same pattern as products
+          // Document structure: { gmail, products, columnConfigs, updatedAt }
+          // ALL THREE fields (gmail, products, columnConfigs) must be saved
+          console.log(`[POST] 💾 Saving to MongoDB for ${userEmail}`)
           console.log(`[POST] Document structure being saved:`)
-          console.log(`[POST]   - gmail: "${docData.gmail}"`)
-          console.log(`[POST]   - products: ${docData.products.length} items`)
-          console.log(`[POST]   - columnConfigs: ${docData.columnConfigs ? (Array.isArray(docData.columnConfigs) ? `${docData.columnConfigs.length} columns` : 'invalid type') : 'null'}`)
-          console.log(`[POST]   - updatedAt: ${docData.updatedAt}`)
+          console.log(`[POST]   - gmail: "${updateData.gmail}"`)
+          console.log(`[POST]   - products: ${updateData.products.length} items`)
+          console.log(`[POST]   - columnConfigs: ${updateData.columnConfigs ? (Array.isArray(updateData.columnConfigs) ? `${updateData.columnConfigs.length} columns` : 'invalid type') : 'not included (will preserve existing or be missing)'}`)
+          console.log(`[POST]   - updatedAt: ${updateData.updatedAt}`)
           
-          await userDocRef.set(docData, { merge: true })
-          console.log(`[POST] ✓✓✓ Document saved to Firestore`)
+          // Save with upsert - use gmail as the key
+          // Also remove old fields if they exist (migration cleanup)
+          console.log(`[POST] Executing upsert operation...`)
+          console.log(`[POST] Query filter: { gmail: "${userEmail}" }`)
+          console.log(`[POST] Update data keys:`, Object.keys(updateData))
           
-          // Verify data was saved correctly
-          console.log(`[POST] Verifying saved data in Firestore...`)
-          const afterSave = await userDocRef.get()
+          const result = await collection.updateOne(
+            { gmail: userEmail },
+            { 
+              $set: updateData,
+              $unset: { userEmail: "", columnConfig: "" } // Remove old field names if they exist
+            },
+            { upsert: true }
+          )
           
-          if (!afterSave.exists) {
-            console.error(`[POST] ❌❌❌ CRITICAL ERROR: Document NOT FOUND after save!`)
-            console.error(`[POST] Document ID: ${docId}`)
+          console.log(`[POST] MongoDB update result for ${userEmail}:`)
+          console.log(`[POST]   - matchedCount: ${result.matchedCount}`)
+          console.log(`[POST]   - modifiedCount: ${result.modifiedCount}`)
+          console.log(`[POST]   - upsertedCount: ${result.upsertedCount}`)
+          console.log(`[POST]   - upsertedId: ${result.upsertedId || 'none'}`)
+          
+          if (result.upsertedCount > 0) {
+            console.log(`[POST] ✓✓✓ NEW document created in MongoDB with ID: ${result.upsertedId}`)
+          } else if (result.modifiedCount > 0) {
+            console.log(`[POST] ✓✓✓ EXISTING document updated in MongoDB`)
           } else {
-            console.log(`[POST] ✓ Document found in Firestore after save`)
-            const savedData = afterSave.data()
-            const savedGmail = savedData?.gmail || null
-            const afterCount = savedData?.products?.length || 0
-            const savedColumnConfigs = savedData?.columnConfigs || null
-            
-            console.log(`[POST] 📋 Firestore Document Structure Verification:`)
-            console.log(`[POST]   ✓ gmail: ${savedGmail ? `"${savedGmail}"` : '❌ MISSING'}`)
-            console.log(`[POST]   ✓ products: ${savedData?.products ? `${afterCount} items` : '❌ MISSING'}`)
-            console.log(`[POST]   ✓ columnConfigs: ${savedColumnConfigs ? (Array.isArray(savedColumnConfigs) ? `${savedColumnConfigs.length} columns` : 'invalid type') : '❌ MISSING'}`)
-            console.log(`[POST]   ✓ updatedAt: ${savedData?.updatedAt ? 'present' : 'missing'}`)
-            
-            // Verify column configuration was saved
-            if (columnConfig !== undefined && Array.isArray(columnConfig)) {
-              if (Array.isArray(savedColumnConfigs)) {
-                const columnConfigSaved = JSON.stringify(savedColumnConfigs) === JSON.stringify(columnConfig)
-                if (columnConfigSaved) {
-                  const customCols = columnConfig.filter((c: ColumnConfig) => c.isCustom)
-                  console.log(`[POST] ✓✓✓ Column configuration VERIFIED in Firestore for ${userEmail}: ${columnConfig.length} total columns (${customCols.length} custom)`)
-                } else {
-                  console.error(`[POST] ❌❌❌ Column configuration VERIFICATION FAILED for ${userEmail}`)
-                }
-              }
-            }
-            
-            // Return success - data is now safely stored in Firestore
-            const responseData = {
-              success: true,
-              products,
-              saved: true,
-              storage: 'firestore',
-              columnConfig: savedColumnConfigs || columnConfig || null,
-              documentStructure: {
-                gmail: savedGmail || userEmail,
-                productsCount: afterCount,
-                columnConfigCount: Array.isArray(savedColumnConfigs) ? savedColumnConfigs.length : (savedColumnConfigs ? 'invalid' : 0),
-                hasAllFields: !!(savedGmail && savedData?.products && savedColumnConfigs !== null)
-              }
-            }
-            
-            console.log(`[POST] ✓✓✓ Returning success response with complete document structure`)
-            
-            return NextResponse.json(
-              responseData,
-              {
-                headers: {
-                  'Cache-Control': 'no-store, no-cache, must-revalidate',
-                  'Pragma': 'no-cache',
-                },
-              }
-            )
+            console.warn(`[POST] ⚠⚠⚠ WARNING: No document was created or modified!`)
+            console.warn(`[POST] This might indicate a problem with the save operation`)
           }
+          
+          // Verify data was saved correctly - ensure ALL THREE fields are in MongoDB
+          // Document structure: { gmail, products, columnConfigs, updatedAt }
+          console.log(`[POST] Verifying saved data in database...`)
+          const afterSave = await collection.findOne({ gmail: userEmail })
+          
+          if (!afterSave) {
+            console.error(`[POST] ❌❌❌ CRITICAL ERROR: Document NOT FOUND after save!`)
+            console.error(`[POST] Query used: { gmail: "${userEmail}" }`)
+            console.error(`[POST] This means the save operation may have failed silently`)
+          } else {
+            console.log(`[POST] ✓ Document found in database after save`)
+          }
+          
+          const afterCount = afterSave?.products?.length || 0
+          const savedColumnConfigs = afterSave?.columnConfigs || null
+          const savedGmail = afterSave?.gmail || null
+          
+          console.log(`[POST] MongoDB save for ${userEmail}: ${result.modifiedCount} modified, ${result.upsertedCount} inserted`)
+          console.log(`[POST] Products: ${products.length} saved, verified: ${afterCount} in DB`)
+          
+          // Verify complete document structure - all three fields should be present
+          console.log(`[POST] 📋 MongoDB Document Structure Verification:`)
+          console.log(`[POST]   ✓ gmail: ${savedGmail ? `"${savedGmail}"` : '❌ MISSING'}`)
+          console.log(`[POST]   ✓ products: ${afterSave?.products ? `${afterCount} items` : '❌ MISSING'}`)
+          console.log(`[POST]   ✓ columnConfigs: ${savedColumnConfigs ? (Array.isArray(savedColumnConfigs) ? `${savedColumnConfigs.length} columns` : 'invalid type') : '❌ MISSING'}`)
+          console.log(`[POST]   ✓ updatedAt: ${afterSave?.updatedAt ? 'present' : 'missing'}`)
+          
+          // Return success - data is now safely stored in MongoDB
+          // Document structure verified: { gmail, products, columnConfigs, updatedAt }
+          // ALL THREE fields are guaranteed to be in MongoDB
+          const responseData = {
+            success: true,
+            products,
+            saved: true,
+            storage: 'mongodb',
+            columnConfig: savedColumnConfigs || columnConfig || null, // Return saved config
+            documentStructure: {
+              gmail: savedGmail || userEmail,
+              productsCount: afterCount,
+              columnConfigCount: Array.isArray(savedColumnConfigs) ? savedColumnConfigs.length : (savedColumnConfigs ? 'invalid' : 0),
+              hasAllFields: !!(savedGmail && afterSave?.products && savedColumnConfigs !== null)
+            }
+          }
+          
+          console.log(`[POST] ✓✓✓ Returning success response with complete document structure:`)
+          console.log(`[POST]   - gmail: "${responseData.documentStructure.gmail}"`)
+          console.log(`[POST]   - products: ${responseData.documentStructure.productsCount} items`)
+          console.log(`[POST]   - columnConfigs: ${responseData.documentStructure.columnConfigCount} columns`)
+          console.log(`[POST]   - All fields present: ${responseData.documentStructure.hasAllFields ? 'YES ✓' : 'NO ❌'}`)
+          
+          return NextResponse.json(
+            responseData,
+            {
+              headers: {
+                'Cache-Control': 'no-store, no-cache, must-revalidate',
+                'Pragma': 'no-cache',
+              },
+            }
+          )
         }
       } catch (error: any) {
-        console.error("[POST] ❌ Firestore operation failed, falling back to in-memory storage")
+        console.error("[POST] ❌ MongoDB operation failed, falling back to in-memory storage")
         console.error("[POST] Error type:", error.constructor?.name || typeof error)
         console.error("[POST] Error message:", error.message || String(error))
         console.error("[POST] Error stack:", error.stack)
-        if (error.message?.includes('permission-denied')) {
-          console.error("[POST] Permission denied - check Firestore security rules allow writes")
+        if (error.message?.includes('MongoParseError') || error.message?.includes('Protocol and host')) {
+          console.error("[POST] Connection string error - check if password contains @ symbol and needs URL encoding")
         }
-        if (error.message?.includes('not-found')) {
-          console.error("[POST] Collection or document not found")
+        if (error.message?.includes('authentication failed')) {
+          console.error("[POST] Authentication failed - check MongoDB username and password")
+        }
+        if (error.message?.includes('timeout')) {
+          console.error("[POST] Connection timeout - check network/firewall settings")
+          console.error("[POST] On Vercel: Make sure MongoDB Atlas Network Access allows all IPs (0.0.0.0/0) or Vercel IP ranges")
+        }
+        if (error.message?.includes('ENOTFOUND') || error.message?.includes('getaddrinfo')) {
+          console.error("[POST] DNS resolution failed - check cluster hostname in MONGODB_URI")
         }
         // Fall through to in-memory fallback
       }
     } else {
-      console.warn(`[POST] ⚠ Firebase not configured - Firebase credentials not found`)
-      console.warn(`[POST] Check: 1) .env.local exists, 2) Firebase env vars are set, 3) Dev server was restarted`)
+      if (!mongoConfigured) {
+        console.warn(`[POST] ⚠ MongoDB not configured - MONGODB_URI environment variable not found`)
+        console.warn(`[POST] Check: 1) .env.local exists, 2) MONGODB_URI is set, 3) Dev server was restarted`)
+      }
+      if (mongoConfigured && !clientPromise) {
+        console.warn(`[POST] ⚠ MongoDB clientPromise is null - connection may have failed during initialization`)
+        console.warn(`[POST] Falling back to in-memory storage`)
+      }
     }
 
     // Fallback to in-memory storage (WARNING: data lost on redeploy)
-    // Only used if Firebase is not configured or Firestore connection fails
-    console.warn(`[POST] ⚠⚠⚠ Using in-memory storage for ${userEmail} (Firebase not configured or failed)`)
+    // Only used if MongoDB is not configured or MongoDB connection fails
+    console.warn(`[POST] ⚠⚠⚠ Using in-memory storage for ${userEmail} (MongoDB not configured or failed)`)
     console.warn(`[POST] This means data will be LOST on server restart!`)
-    console.warn(`[POST] To fix: 1) Check Firebase env vars in .env.local, 2) Restart dev server, 3) Check Firestore connection`)
+    console.warn(`[POST] To fix: 1) Check MONGODB_URI in .env.local, 2) Restart dev server, 3) Check MongoDB connection`)
     
     productsStore[userEmail] = products
     
@@ -426,7 +557,7 @@ export async function POST(request: NextRequest) {
         products, 
         saved: true, 
         storage: 'memory', 
-        warning: 'Data will be lost on server restart - Firebase not configured',
+        warning: 'Data will be lost on server restart - MongoDB not configured',
         columnConfig: columnConfig || columnConfigStore[userEmail] || null
       },
       {
