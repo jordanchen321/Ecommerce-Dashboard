@@ -66,7 +66,8 @@ export default function Home() {
   }, [session?.user?.email])
 
   // Save products to API whenever products change (tied to user email)
-  // Only save after initial data is loaded to prevent overwriting with empty array
+  // CRITICAL: Only save after initial data is loaded to prevent overwriting with empty array
+  // This ensures user data persists across website updates and deployments
   useEffect(() => {
     if (!session?.user?.email || !isLoaded) return
 
@@ -82,10 +83,14 @@ export default function Home() {
         })
         
         if (!response.ok) {
-          console.error('Failed to save products to server')
+          console.error('Failed to save products to server - data may not persist')
+          // Note: We don't clear products on save error - preserve local state
+          // The server-side data in MongoDB remains unchanged
         }
       } catch (error) {
         console.error('Error saving products:', error)
+        // On error, keep local products - don't clear them
+        // MongoDB still has the last successfully saved version
       }
     }, 500) // Wait 500ms after last change before saving
 

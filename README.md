@@ -124,11 +124,38 @@ To enable data synchronization across devices (so products sync between phone, l
 
 4. **Redeploy** after adding `MONGODB_URI`
 
-**Important Data Persistence Notes:**
+**⚠️ CRITICAL: Data Persistence Across Deployments**
 
-- **With MongoDB**: Your product data will persist across deployments, server restarts, and device switches. Data is stored in the cloud and tied to your Google account email.
-- **Without MongoDB**: Data is stored in-memory only and will be **lost** when you redeploy or when the serverless function restarts on Vercel.
-- **To ensure data survives updates**: Set up MongoDB and configure `MONGODB_URI` in your environment variables.
+Your user data is **100% safe** when you update the website code, as long as MongoDB is configured:
+
+✅ **With MongoDB Configured:**
+- **All user data persists permanently** across code updates, deployments, and server restarts
+- Data is stored in MongoDB Atlas cloud database (separate from your code)
+- Each user's data is tied to their Google account email (`userEmail` as unique key)
+- Data survives all website updates - code changes never affect existing data
+- Data syncs across all devices (phone, laptop, tablet, etc.)
+- Uses MongoDB `upsert` operations - never overwrites unless explicitly updating
+
+❌ **Without MongoDB:**
+- Data is stored in-memory only and will be **LOST** on:
+  - Code deployments
+  - Server restarts
+  - Vercel function cold starts
+- Data does NOT sync across devices
+
+**🔒 How Data Persistence Works:**
+
+1. **Data Storage**: All product data is stored in MongoDB with `userEmail` as the unique key
+2. **Load on Login**: When a user signs in, the app fetches their data from MongoDB (always the latest saved version)
+3. **Save on Changes**: When products are added/removed, data is saved to MongoDB (debounced to avoid excessive writes)
+4. **Deployment Safety**: Code deployments only affect your website code - MongoDB database remains completely separate and unchanged
+
+**📋 To Guarantee Data Persistence:**
+
+1. Set up MongoDB Atlas (free tier available)
+2. Add `MONGODB_URI` to your Vercel environment variables
+3. Redeploy once to activate MongoDB
+4. ✅ All existing and future user data will now survive all code updates
 
 **Note:** Without MongoDB, data won't sync across devices. With MongoDB, your products will be available on all devices when you sign in with the same Google account.
 

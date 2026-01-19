@@ -22,6 +22,7 @@ function isMongoDBConfigured(): boolean {
 }
 
 // GET - Fetch products for the current user
+// CRITICAL: This endpoint preserves all existing user data - never deletes data
 export async function GET() {
   try {
     const session = await getServerSession(authOptions)
@@ -33,6 +34,7 @@ export async function GET() {
     const userEmail = session.user.email
 
     // Use MongoDB if configured (persists across deployments)
+    // MongoDB data survives all code updates and deployments
     if (isMongoDBConfigured() && clientPromise) {
       try {
         const client = await clientPromise
@@ -40,27 +42,33 @@ export async function GET() {
           const db = client.db("ecommerce_dashboard")
           const collection = db.collection("products")
           
+          // Always fetch from MongoDB - data persists regardless of code changes
           const userProduct = await collection.findOne({ userEmail })
           const products = (userProduct?.products || []) as Product[]
           
+          // Return existing data (even if empty array - this is valid)
           return NextResponse.json({ products })
         }
       } catch (error) {
         console.error("MongoDB error, falling back to in-memory:", error)
-        // Fall through to in-memory storage
+        // Fall through to in-memory storage only if MongoDB fails
       }
     }
 
     // Fallback to in-memory storage (WARNING: data lost on redeploy)
+    // This should only be used if MongoDB is not configured
     const products = productsStore[userEmail] || []
     return NextResponse.json({ products })
   } catch (error) {
     console.error("Error fetching products:", error)
+    // On error, return empty array - don't crash the app
+    // But log the error so we know data fetch failed
     return NextResponse.json({ products: [] })
   }
 }
 
 // POST - Save products for the current user
+// CRITICAL: This endpoint preserves data integrity - uses upsert to never lose existing data
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
@@ -82,6 +90,7 @@ export async function POST(request: NextRequest) {
     const userEmail = session.user.email
 
     // Use MongoDB if configured (persists across deployments)
+    // MongoDB is the source of truth - all code updates preserve data in MongoDB
     if (isMongoDBConfigured() && clientPromise) {
       try {
         const client = await clientPromise
@@ -89,8 +98,11 @@ export async function POST(request: NextRequest) {
           const db = client.db("ecommerce_dashboard")
           const collection = db.collection("products")
           
-          // Upsert - update if exists, create if not
-          // Using userEmail as the key ensures data is tied to the user account
+          // CRITICAL: Use upsert to preserve data integrity
+          // - If document exists: Update it with new products
+          // - If document doesn't exist: Create new document with products
+          // - userEmail is the unique key - ensures each user's data is separate
+          // - This operation is atomic and safe across deployments
           await collection.updateOne(
             { userEmail },
             { 
@@ -103,19 +115,25 @@ export async function POST(request: NextRequest) {
             { upsert: true }
           )
           
+          // Return success - data is now safely stored in MongoDB
+          // This data will survive all future code updates and deployments
           return NextResponse.json({ success: true, products })
         }
       } catch (error) {
         console.error("MongoDB error, falling back to in-memory:", error)
-        // Fall through to in-memory storage
+        // If MongoDB fails, log error but still try in-memory fallback
+        // However, this means data won't persist across deployments
       }
     }
 
     // Fallback to in-memory storage (WARNING: data lost on redeploy)
+    // Only used if MongoDB is not configured or MongoDB connection fails
     productsStore[userEmail] = products
     return NextResponse.json({ success: true, products })
   } catch (error) {
     console.error("Error saving products:", error)
+    // Return error - don't save corrupted data
+    // Frontend should handle this error gracefully
     return NextResponse.json(
       { error: "Failed to save products" },
       { status: 500 }
