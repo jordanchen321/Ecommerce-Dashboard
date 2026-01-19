@@ -249,7 +249,13 @@ export async function POST(request: NextRequest) {
     // Use MongoDB if configured (persists across deployments)
     // MongoDB is the source of truth - all code updates preserve data in MongoDB
     const mongoConfigured = isMongoDBConfigured()
-    console.log(`[POST] MongoDB check: configured=${mongoConfigured}, clientPromise=${!!clientPromise}`)
+    const hasClientPromise = !!clientPromise
+    console.log(`[POST] MongoDB check: configured=${mongoConfigured}, clientPromise=${hasClientPromise}`)
+    console.log(`[POST] MONGODB_URI exists: ${!!process.env.MONGODB_URI}`)
+    if (process.env.MONGODB_URI) {
+      const maskedUri = process.env.MONGODB_URI.replace(/:([^:@]+)@/, ':****@')
+      console.log(`[POST] MONGODB_URI: ${maskedUri.substring(0, 50)}...`)
+    }
     
     // Try MongoDB first if configured
     if (mongoConfigured && clientPromise) {
@@ -487,7 +493,9 @@ export async function POST(request: NextRequest) {
         }
       } catch (error: any) {
         console.error("[POST] ❌ MongoDB operation failed, falling back to in-memory storage")
-        console.error("[POST] Error details:", error.message || error)
+        console.error("[POST] Error type:", error.constructor?.name || typeof error)
+        console.error("[POST] Error message:", error.message || String(error))
+        console.error("[POST] Error stack:", error.stack)
         if (error.message?.includes('MongoParseError') || error.message?.includes('Protocol and host')) {
           console.error("[POST] Connection string error - check if password contains @ symbol and needs URL encoding")
         }
@@ -496,6 +504,10 @@ export async function POST(request: NextRequest) {
         }
         if (error.message?.includes('timeout')) {
           console.error("[POST] Connection timeout - check network/firewall settings")
+          console.error("[POST] On Vercel: Make sure MongoDB Atlas Network Access allows all IPs (0.0.0.0/0) or Vercel IP ranges")
+        }
+        if (error.message?.includes('ENOTFOUND') || error.message?.includes('getaddrinfo')) {
+          console.error("[POST] DNS resolution failed - check cluster hostname in MONGODB_URI")
         }
         // Fall through to in-memory fallback
       }
