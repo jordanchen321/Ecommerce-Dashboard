@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { getMongoDBUriStatus } from "@/lib/mongodb"
+import { getMongoDBUriStatus, isMongoDBConnected, getConnectionTroubleshootingSteps } from "@/lib/mongodb"
 
 // Disable caching
 export const dynamic = 'force-dynamic'
@@ -20,6 +20,19 @@ export async function GET() {
 
     // Get detailed MongoDB URI status
     const mongoUriStatus = getMongoDBUriStatus()
+    
+    // Test actual connection if URI is configured
+    let connectionStatus = null
+    let connectionError = null
+    if (mongoUriSet && mongoUriStatus.exists) {
+      try {
+        const isConnected = await isMongoDBConnected()
+        connectionStatus = isConnected ? 'connected' : 'failed'
+      } catch (error: any) {
+        connectionStatus = 'error'
+        connectionError = error.message || String(error)
+      }
+    }
 
     // Mask MONGODB_URI for security (show only first 20 chars and last 10 chars)
     let mongoUriPreview = "Not set"
@@ -32,6 +45,12 @@ export async function GET() {
       }
     }
 
+    // Get troubleshooting steps if there's a connection error
+    let troubleshootingSteps: string[] | null = null
+    if (connectionError) {
+      troubleshootingSteps = getConnectionTroubleshootingSteps(connectionError)
+    }
+
     return NextResponse.json({
       environment: process.env.NODE_ENV || "unknown",
       vercel: isVercel,
@@ -41,10 +60,18 @@ export async function GET() {
         format: mongoUriStatus.format,
         preview: mongoUriStatus.preview,
         clientPromiseExists: mongoUriStatus.clientPromiseExists,
+        connectionStatus: connectionStatus || 'not_tested',
+        connectionError: connectionError || null,
+        diagnostics: mongoUriStatus.diagnostics,
         note: mongoUriSet 
           ? `✓ MongoDB URI is configured (${mongoUriStatus.format}, ${mongoUriStatus.length} chars)` 
           : "❌ MONGODB_URI is NOT set - data will save to memory only"
       },
+      troubleshooting: troubleshootingSteps ? {
+        error: connectionError,
+        steps: troubleshootingSteps,
+        documentation: "https://www.mongodb.com/docs/atlas/troubleshoot-connection/"
+      } : null,
       environmentVariables: {
         MONGODB_URI: {
           set: mongoUriSet,
