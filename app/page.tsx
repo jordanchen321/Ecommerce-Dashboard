@@ -124,6 +124,13 @@ export default function Home() {
     const productsChanged = JSON.stringify(products) !== JSON.stringify(lastSavedProductsRef.current)
     if (!productsChanged) return
 
+    // CRITICAL: Never save empty array if we had data before (prevents accidental deletion)
+    // This protects against race conditions where initial load fails but save effect runs
+    if (products.length === 0 && lastSavedProductsRef.current.length > 0) {
+      console.warn('[Frontend] ⚠ Prevented saving empty array - preserving existing data. This may indicate a data loading issue.')
+      return
+    }
+
     // Debounce API calls - wait a bit before saving to avoid too many requests
     const timeoutId = setTimeout(async () => {
       try {
@@ -141,6 +148,16 @@ export default function Home() {
         
         if (response.ok) {
           const data = await response.json()
+          
+          // If server preserved existing data (empty array was rejected), update local state
+          if (data.message === 'Preserved existing data' && Array.isArray(data.products)) {
+            console.log(`[Frontend] Server preserved existing data - updating local state with ${data.products.length} products`)
+            setProducts(data.products)
+            setFilteredProducts(data.products)
+            lastSavedProductsRef.current = data.products
+            return
+          }
+          
           // Update last saved reference only on success
           lastSavedProductsRef.current = products
           if (data.storage === 'mongodb') {

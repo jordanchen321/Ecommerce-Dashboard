@@ -65,6 +65,14 @@ export async function GET() {
       try {
         const client = await clientPromise
         if (client) {
+          // Verify connection is still alive
+          try {
+            await client.db("admin").command({ ping: 1 })
+          } catch (pingError) {
+            console.error("[GET] MongoDB connection health check failed:", pingError)
+            throw new Error("MongoDB connection is not healthy")
+          }
+          
           const db = client.db("ecommerce_dashboard")
           const collection = db.collection("products")
           
@@ -77,6 +85,12 @@ export async function GET() {
           const products: Product[] = rawProducts.map(normalizeProduct)
           
           console.log(`[GET] MongoDB fetch for ${userEmail}: Found ${products.length} products`)
+          
+          // Log if document exists but has no products (potential data loss indicator)
+          if (userProduct && (!userProduct.products || !Array.isArray(userProduct.products) || userProduct.products.length === 0)) {
+            console.warn(`[GET] ⚠ User document exists for ${userEmail} but products array is empty or missing`)
+            console.warn(`[GET] Document keys:`, Object.keys(userProduct))
+          }
           
           // Return existing data with no-cache headers
           return NextResponse.json(
@@ -93,6 +107,7 @@ export async function GET() {
         }
       } catch (error: any) {
         console.error("[GET] MongoDB error, falling back to in-memory:", error.message || error)
+        console.error("[GET] Error stack:", error.stack)
         if (error.message?.includes('MongoParseError') || error.message?.includes('Protocol and host')) {
           console.error("[GET] Connection string error - check if password contains @ symbol and needs URL encoding")
         }
@@ -159,21 +174,34 @@ export async function POST(request: NextRequest) {
       try {
         const client = await clientPromise
         if (client) {
+          // Verify connection is still alive before operations
+          try {
+            await client.db("admin").command({ ping: 1 })
+          } catch (pingError) {
+            console.error("[POST] MongoDB connection health check failed:", pingError)
+            throw new Error("MongoDB connection is not healthy")
+          }
+          
           const db = client.db("ecommerce_dashboard")
           const collection = db.collection("products")
           
-          // Safety check: If trying to save empty array, check if there's existing data
-          // This prevents accidental data loss during initial load race conditions
+          // CRITICAL Safety check: If trying to save empty array, check if there's existing data
+          // This prevents accidental data loss during initial load race conditions or connection issues
           if (products.length === 0) {
             const existing = await collection.findOne({ userEmail })
             if (existing && existing.products && Array.isArray(existing.products) && existing.products.length > 0) {
               // Don't overwrite existing data with empty array - return existing data instead
-              console.log(`Prevented overwriting ${existing.products.length} products with empty array for user ${userEmail}`)
+              console.log(`[POST] ⚠ SAFETY CHECK: Prevented overwriting ${existing.products.length} products with empty array for user ${userEmail}`)
+              console.log(`[POST] This indicates a potential race condition - frontend tried to save empty array when data exists in database`)
               return NextResponse.json({ 
                 success: true, 
                 products: existing.products,
-                message: "Preserved existing data" 
+                message: "Preserved existing data",
+                warning: "Empty array was rejected - existing data preserved"
               })
+            } else {
+              // No existing data - allow empty array (user has no products yet)
+              console.log(`[POST] Allowing empty array save for user ${userEmail} (no existing data found)`)
             }
           }
           
@@ -182,6 +210,11 @@ export async function POST(request: NextRequest) {
           // - If document doesn't exist: Create new document with products
           // - userEmail is the unique key - ensures each user's data is separate
           // - This operation is atomic and safe across deployments
+          
+          // Log before save for debugging
+          const beforeSave = await collection.findOne({ userEmail })
+          const beforeCount = beforeSave?.products?.length || 0
+          
           const result = await collection.updateOne(
             { userEmail },
             { 
@@ -194,7 +227,17 @@ export async function POST(request: NextRequest) {
             { upsert: true }
           )
           
+          // Verify data was saved correctly
+          const afterSave = await collection.findOne({ userEmail })
+          const afterCount = afterSave?.products?.length || 0
+          
           console.log(`[POST] MongoDB save for ${userEmail}: ${result.modifiedCount} modified, ${result.upsertedCount} inserted, ${products.length} products saved`)
+          console.log(`[POST] Data verification: Before=${beforeCount} products, After=${afterCount} products`)
+          
+          // Alert if data count decreased unexpectedly (potential data loss)
+          if (beforeCount > 0 && afterCount < beforeCount && products.length < beforeCount) {
+            console.error(`[POST] ⚠ WARNING: Data count decreased from ${beforeCount} to ${afterCount} products for user ${userEmail}`)
+          }
           
           // Return success - data is now safely stored in MongoDB
           // This data will survive all future code updates and deployments
