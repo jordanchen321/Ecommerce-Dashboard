@@ -106,7 +106,12 @@ export async function GET() {
           // This makes the data resilient to schema changes - old data still works
           const products: Product[] = rawProducts.map(normalizeProduct)
           
-          console.log(`[GET] MongoDB fetch for ${userEmail}: Found ${products.length} products`)
+          // Log products (same pattern as columns)
+          if (products.length > 0) {
+            console.log(`[GET] ✓ Loaded ${products.length} products from MongoDB for ${userEmail} (persistent across devices)`)
+          } else {
+            console.log(`[GET] No products found in MongoDB for ${userEmail}, returning empty array (will be saved on first product added)`)
+          }
           
           // Log if document exists but has no products (potential data loss indicator)
           if (userProduct && (!userProduct.products || !Array.isArray(userProduct.products) || userProduct.products.length === 0)) {
@@ -114,12 +119,14 @@ export async function GET() {
             console.warn(`[GET] Document keys:`, Object.keys(userProduct))
           }
           
-          // Also fetch column configuration if it exists
+          // Also fetch column configuration if it exists (same pattern as products)
           // Column config is stored per user and persists across all devices
           const columnConfig = userProduct?.columnConfig || null
           
-          if (columnConfig) {
-            console.log(`[GET] Loaded column configuration for ${userEmail}: ${Array.isArray(columnConfig) ? columnConfig.length : 'invalid'} columns`)
+          if (columnConfig && Array.isArray(columnConfig) && columnConfig.length > 0) {
+            console.log(`[GET] ✓ Loaded ${columnConfig.length} column configurations from MongoDB for ${userEmail} (persistent across devices)`)
+          } else {
+            console.log(`[GET] No column config found in MongoDB for ${userEmail}, will use defaults (will be saved on first change)`)
           }
           
           // Return existing data with no-cache headers

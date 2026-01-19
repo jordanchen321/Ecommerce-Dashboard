@@ -98,31 +98,38 @@ export default function Home() {
         })
         if (response.ok) {
           const data = await response.json()
+          
+          // Load products from MongoDB (same pattern as columns)
+          // Products are stored in MongoDB and persist across all devices and sessions
           if (Array.isArray(data.products)) {
-            console.log(`[Frontend] Loaded ${data.products.length} products from server`)
+            if (data.products.length > 0) {
+              console.log(`[Frontend] ✓ Loaded ${data.products.length} products from MongoDB (persistent across devices)`)
+            } else {
+              console.log(`[Frontend] No products found in MongoDB, starting with empty list (will be saved on first product added)`)
+            }
             setProducts(data.products)
             setFilteredProducts(data.products)
             lastSavedProductsRef.current = data.products
-            
-            // Load column configuration if available
-            // Column config is stored in MongoDB and persists across all devices and sessions
-            if (data.columnConfig && Array.isArray(data.columnConfig) && data.columnConfig.length > 0) {
-              console.log(`[Frontend] ✓ Loaded ${data.columnConfig.length} column configurations from MongoDB (persistent across devices)`)
-              console.log(`[Frontend] Column config:`, data.columnConfig.map((c: ColumnConfig) => ({ field: c.field, label: c.label, visible: c.visible, isCustom: c.isCustom })))
-              setColumns(data.columnConfig as ColumnConfig[])
-              lastSavedColumnsRef.current = data.columnConfig as ColumnConfig[]
-            } else {
-              // Use default columns if no config exists (first time user)
-              const defaultCols = getDefaultColumns()
-              console.log(`[Frontend] No column config found in MongoDB, using default columns (will be saved on first change)`)
-              setColumns(defaultCols)
-              lastSavedColumnsRef.current = defaultCols
-            }
           } else {
-            console.warn('[Frontend] Invalid products data format received')
+            console.warn('[Frontend] Invalid products data format received, starting with empty list')
             setProducts([])
             setFilteredProducts([])
             lastSavedProductsRef.current = []
+          }
+          
+          // Load column configuration if available (same pattern as products)
+          // Column config is stored in MongoDB and persists across all devices and sessions
+          if (data.columnConfig && Array.isArray(data.columnConfig) && data.columnConfig.length > 0) {
+            console.log(`[Frontend] ✓ Loaded ${data.columnConfig.length} column configurations from MongoDB (persistent across devices)`)
+            console.log(`[Frontend] Column config:`, data.columnConfig.map((c: ColumnConfig) => ({ field: c.field, label: c.label, visible: c.visible, isCustom: c.isCustom })))
+            setColumns(data.columnConfig as ColumnConfig[])
+            lastSavedColumnsRef.current = data.columnConfig as ColumnConfig[]
+          } else {
+            // Use default columns if no config exists (first time user)
+            const defaultCols = getDefaultColumns()
+            console.log(`[Frontend] No column config found in MongoDB, using default columns (will be saved on first change)`)
+            setColumns(defaultCols)
+            lastSavedColumnsRef.current = defaultCols
           }
         } else {
           // If unauthorized or error, start with empty array
