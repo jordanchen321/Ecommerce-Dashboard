@@ -237,15 +237,33 @@ export default function Home() {
         
         if (response.ok) {
           const data = await response.json()
+          
+          // Verify server response includes document structure confirmation
+          if (data.documentStructure) {
+            console.log(`[Frontend] ✓ Server confirmed MongoDB document structure:`)
+            console.log(`[Frontend]   - userEmail: "${data.documentStructure.userEmail}"`)
+            console.log(`[Frontend]   - products: ${data.documentStructure.productsCount} items`)
+            console.log(`[Frontend]   - columnConfig: ${data.documentStructure.columnConfigCount} columns`)
+            console.log(`[Frontend]   - All fields present: ${data.documentStructure.hasAllFields ? 'YES ✓' : 'NO ❌'}`)
+          }
+          
           // Update with the saved column config from server to ensure sync
           if (data.columnConfig && Array.isArray(data.columnConfig)) {
             lastSavedColumnsRef.current = data.columnConfig as ColumnConfig[]
             const savedCustomCols = (data.columnConfig as ColumnConfig[]).filter(c => c.isCustom)
-            console.log(`[Frontend] ✓ Successfully saved column configuration to MongoDB (${data.columnConfig.length} total, ${savedCustomCols.length} custom)`)
+            console.log(`[Frontend] ✓✓✓ Successfully saved column configuration to MongoDB (${data.columnConfig.length} total, ${savedCustomCols.length} custom)`)
             console.log(`[Frontend] Column config synced:`, (data.columnConfig as ColumnConfig[]).map((c: ColumnConfig) => ({ field: c.field, label: c.label, visible: c.visible, isCustom: c.isCustom })))
+            
+            // Verify all three fields are confirmed in MongoDB
+            if (data.documentStructure?.hasAllFields) {
+              console.log(`[Frontend] ✓✓✓ MongoDB document verified: userEmail, products, and columnConfig all saved successfully!`)
+            } else {
+              console.warn(`[Frontend] ⚠ Server response indicates some fields may be missing in MongoDB`)
+            }
           } else {
             lastSavedColumnsRef.current = columns
-            console.log(`[Frontend] ✓ Column configuration saved (awaiting server confirmation)`)
+            console.warn(`[Frontend] ⚠ Column configuration save response missing columnConfig data`)
+            console.warn(`[Frontend] Response data:`, { success: data.success, storage: data.storage, hasColumnConfig: !!data.columnConfig })
           }
         } else {
           const errorData = await response.json().catch(() => ({}))

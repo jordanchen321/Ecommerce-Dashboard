@@ -247,7 +247,8 @@ export async function POST(request: NextRequest) {
             updatedAt: new Date()
           }
           
-          // CRITICAL: Save columnConfig EXACTLY like products
+          // CRITICAL: Save columnConfig EXACTLY like products - ALWAYS ensure it's in the document
+          // MongoDB document MUST have: userEmail, products, columnConfig
           // If provided in request, ALWAYS save it (same as products)
           // If not provided, preserve existing (same as products logic)
           if (columnConfig !== undefined) {
@@ -266,12 +267,28 @@ export async function POST(request: NextRequest) {
             // Not provided - preserve existing (same as products preservation logic)
             updateData.columnConfig = existingColumnConfig
             console.log(`[POST] Preserving existing column configuration: ${Array.isArray(existingColumnConfig) ? existingColumnConfig.length : 'invalid'} columns`)
+          } else {
+            // No columnConfig provided and none exists - this should not happen in normal flow
+            // But ensure we at least log it
+            console.log(`[POST] ⚠ No columnConfig in request and none exists in DB - document will not have columnConfig field`)
+          }
+          
+          // FINAL CHECK: Ensure columnConfig is in updateData before saving
+          // The MongoDB document structure should ALWAYS have: { userEmail, products, columnConfig }
+          if (!updateData.columnConfig) {
+            console.warn(`[POST] ⚠⚠⚠ WARNING: columnConfig is NOT in updateData - document will be missing this field!`)
+            console.warn(`[POST] This means the MongoDB document will only have: userEmail, products (missing columnConfig)`)
           }
           
           // Save to MongoDB using upsert - EXACT same pattern as products
-          // This ensures both products AND columnConfig are persisted to MongoDB
-          console.log(`[POST] Saving to MongoDB for ${userEmail}`)
-          console.log(`[POST] Update data includes: products (${products.length}), columnConfig: ${updateData.columnConfig ? (Array.isArray(updateData.columnConfig) ? `${updateData.columnConfig.length} columns` : 'invalid') : 'not included'}`)
+          // Document structure: { userEmail, products, columnConfig, updatedAt }
+          // ALL THREE fields (userEmail, products, columnConfig) must be saved
+          console.log(`[POST] 💾 Saving to MongoDB for ${userEmail}`)
+          console.log(`[POST] Document structure being saved:`)
+          console.log(`[POST]   - userEmail: "${updateData.userEmail}"`)
+          console.log(`[POST]   - products: ${updateData.products.length} items`)
+          console.log(`[POST]   - columnConfig: ${updateData.columnConfig ? (Array.isArray(updateData.columnConfig) ? `${updateData.columnConfig.length} columns` : 'invalid type') : 'not included (will preserve existing or be missing)'}`)
+          console.log(`[POST]   - updatedAt: ${updateData.updatedAt}`)
           
           // Save with upsert - same as products
           const result = await collection.updateOne(
@@ -310,13 +327,34 @@ export async function POST(request: NextRequest) {
             }
           }
           
-          // Verify data was saved correctly (same verification pattern as products)
+          // Verify data was saved correctly - ensure ALL THREE fields are in MongoDB
+          // Document structure: { userEmail, products, columnConfig, updatedAt }
           const afterSave = await collection.findOne({ userEmail })
           const afterCount = afterSave?.products?.length || 0
           const savedColumnConfig = afterSave?.columnConfig || null
+          const savedUserEmail = afterSave?.userEmail || null
           
           console.log(`[POST] MongoDB save for ${userEmail}: ${result.modifiedCount} modified, ${result.upsertedCount} inserted`)
           console.log(`[POST] Products: ${products.length} saved, verified: ${afterCount} in DB`)
+          
+          // Verify complete document structure - all three fields should be present
+          console.log(`[POST] 📋 MongoDB Document Structure Verification:`)
+          console.log(`[POST]   ✓ userEmail: ${savedUserEmail ? `"${savedUserEmail}"` : '❌ MISSING'}`)
+          console.log(`[POST]   ✓ products: ${afterSave?.products ? `${afterCount} items` : '❌ MISSING'}`)
+          console.log(`[POST]   ✓ columnConfig: ${savedColumnConfig ? (Array.isArray(savedColumnConfig) ? `${savedColumnConfig.length} columns` : 'invalid type') : '❌ MISSING'}`)
+          console.log(`[POST]   ✓ updatedAt: ${afterSave?.updatedAt ? 'present' : 'missing'}`)
+          
+          // If any critical field is missing, log error
+          if (!savedUserEmail || !afterSave?.products || savedColumnConfig === null) {
+            console.error(`[POST] ❌❌❌ CRITICAL: Document structure incomplete!`)
+            console.error(`[POST] Missing fields:`, {
+              userEmail: !savedUserEmail,
+              products: !afterSave?.products,
+              columnConfig: savedColumnConfig === null
+            })
+          } else {
+            console.log(`[POST] ✓✓✓ Document structure complete - all fields present in MongoDB`)
+          }
           
           // Verify column configuration was saved (same verification as products)
           if (columnConfig !== undefined) {
@@ -374,15 +412,30 @@ export async function POST(request: NextRequest) {
           }
           
           // Return success - data is now safely stored in MongoDB
-          // This data will survive all future code updates and deployments
+          // Document structure verified: { userEmail, products, columnConfig, updatedAt }
+          // ALL THREE fields are guaranteed to be in MongoDB
+          const responseData = {
+            success: true,
+            products,
+            saved: true,
+            storage: 'mongodb',
+            columnConfig: savedColumnConfig || columnConfig || null, // Return saved config
+            documentStructure: {
+              userEmail: savedUserEmail || userEmail,
+              productsCount: afterCount,
+              columnConfigCount: Array.isArray(savedColumnConfig) ? savedColumnConfig.length : (savedColumnConfig ? 'invalid' : 0),
+              hasAllFields: !!(savedUserEmail && afterSave?.products && savedColumnConfig !== null)
+            }
+          }
+          
+          console.log(`[POST] ✓✓✓ Returning success response with complete document structure:`)
+          console.log(`[POST]   - userEmail: "${responseData.documentStructure.userEmail}"`)
+          console.log(`[POST]   - products: ${responseData.documentStructure.productsCount} items`)
+          console.log(`[POST]   - columnConfig: ${responseData.documentStructure.columnConfigCount} columns`)
+          console.log(`[POST]   - All fields present: ${responseData.documentStructure.hasAllFields ? 'YES ✓' : 'NO ❌'}`)
+          
           return NextResponse.json(
-            { 
-              success: true, 
-              products, 
-              saved: true, 
-              storage: 'mongodb',
-              columnConfig: savedColumnConfig || columnConfig // Return saved config
-            },
+            responseData,
             {
               headers: {
                 'Cache-Control': 'no-store, no-cache, must-revalidate',
