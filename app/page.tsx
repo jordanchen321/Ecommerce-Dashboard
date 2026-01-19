@@ -206,20 +206,20 @@ export default function Home() {
 
   if (!session) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
-        <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 px-4 sm:px-6 py-4">
+        <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-6 sm:p-8 mx-auto">
           <div className="flex justify-end mb-4">
             <LanguageSwitcher />
           </div>
-          <h1 className="text-3xl font-bold text-gray-800 mb-2 text-center">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-2 text-center">
             {t('signin.title')}
           </h1>
-          <p className="text-gray-600 mb-6 text-center">
+          <p className="text-sm sm:text-base text-gray-600 mb-6 text-center">
             {t('signin.subtitle')}
           </p>
           <button
             onClick={() => signIn("google", { callbackUrl: '/' })}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition duration-200 flex items-center justify-center gap-2"
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition duration-200 flex items-center justify-center gap-2 text-sm sm:text-base"
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24">
               <path
