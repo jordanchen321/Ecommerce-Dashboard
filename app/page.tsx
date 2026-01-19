@@ -173,19 +173,19 @@ export default function Home() {
     <div className="min-h-screen bg-gray-50">
       <nav className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <h1 className="text-2xl font-bold text-gray-800">{t('app.title')}</h1>
-            <div className="flex items-center gap-4">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center py-3 sm:py-0 sm:h-16 gap-3 sm:gap-0">
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-800">{t('app.title')}</h1>
+            <div className="flex items-center gap-2 sm:gap-4 w-full sm:w-auto justify-between sm:justify-end">
               <LanguageSwitcher />
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 sm:gap-3">
                 {session.user?.image && (
                   <img
                     src={session.user.image}
                     alt={session.user.name || "User"}
-                    className="w-8 h-8 rounded-full"
+                    className="w-7 h-7 sm:w-8 sm:h-8 rounded-full"
                   />
                 )}
-                <span className="text-gray-700 font-medium">
+                <span className="hidden sm:inline text-gray-700 font-medium text-sm sm:text-base">
                   {session.user?.name || session.user?.email}
                 </span>
               </div>
@@ -193,7 +193,7 @@ export default function Home() {
                 onClick={() => {
                   signOut({ callbackUrl: '/' })
                 }}
-                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition duration-200"
+                className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg transition duration-200 text-sm sm:text-base whitespace-nowrap"
               >
                 {t('nav.signOut')}
               </button>
@@ -202,11 +202,11 @@ export default function Home() {
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-lg shadow-md p-6 sticky top-8">
-              <h2 className="text-xl font-semibold text-gray-800 mb-4">
+            <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 lg:sticky lg:top-8">
+              <h2 className="text-lg sm:text-xl font-semibold text-gray-800 mb-4">
                 {t('form.title')}
               </h2>
               <ProductForm onAdd={handleAddProduct} />
@@ -214,9 +214,9 @@ export default function Home() {
           </div>
 
           <div className="lg:col-span-2">
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-semibold text-gray-800">
+            <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 sm:gap-0">
+                <h2 className="text-lg sm:text-xl font-semibold text-gray-800">
                   {t('table.title')} ({filteredProducts.length})
                 </h2>
                 <SearchBar searchTerm={searchTerm} onSearchChange={setSearchTerm} />
