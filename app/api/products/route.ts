@@ -35,7 +35,12 @@ const productsStore: Record<string, Product[]> = {}
 
 // Helper function to check if MongoDB is configured
 function isMongoDBConfigured(): boolean {
-  return !!process.env.MONGODB_URI
+  const hasUri = !!process.env.MONGODB_URI
+  if (!hasUri) {
+    console.warn('[API] ⚠ MONGODB_URI not found in environment variables')
+    console.warn('[API] Check: 1) .env.local file exists, 2) MONGODB_URI is set, 3) Dev server was restarted')
+  }
+  return hasUri
 }
 
 // Helper function to normalize and validate product data from MongoDB
@@ -71,10 +76,15 @@ export async function GET() {
 
     // Use MongoDB if configured (persists across deployments)
     // MongoDB data survives all code updates and deployments
-    if (isMongoDBConfigured() && clientPromise) {
+    const mongoConfigured = isMongoDBConfigured()
+    console.log(`[GET] MongoDB check: configured=${mongoConfigured}, clientPromise=${!!clientPromise}`)
+    
+    if (mongoConfigured && clientPromise) {
       try {
+        console.log(`[GET] Attempting to connect to MongoDB...`)
         const client = await clientPromise
         if (client) {
+          console.log(`[GET] ✓ MongoDB client obtained successfully`)
           // Verify connection is still alive
           try {
             await client.db("admin").command({ ping: 1 })
@@ -124,22 +134,42 @@ export async function GET() {
           )
         }
       } catch (error: any) {
-        console.error("[GET] MongoDB error, falling back to in-memory:", error.message || error)
+        console.error("[GET] ❌❌❌ MongoDB connection FAILED, falling back to in-memory storage")
+        console.error("[GET] Error details:", error.message || error)
         console.error("[GET] Error stack:", error.stack)
         if (error.message?.includes('MongoParseError') || error.message?.includes('Protocol and host')) {
           console.error("[GET] Connection string error - check if password contains @ symbol and needs URL encoding")
+          console.error("[GET] If password is 'pass@123', encode @ as %40: 'pass%40123'")
+        }
+        if (error.message?.includes('authentication failed')) {
+          console.error("[GET] Authentication failed - check MongoDB username and password")
+        }
+        if (error.message?.includes('timeout')) {
+          console.error("[GET] Connection timeout - check network/firewall settings")
         }
         // Fall through to in-memory storage only if MongoDB fails
       }
+    } else {
+      if (!mongoConfigured) {
+        console.warn(`[GET] ⚠ MongoDB not configured - MONGODB_URI environment variable not found`)
+        console.warn(`[GET] Check: 1) .env.local exists, 2) MONGODB_URI is set, 3) Dev server was restarted`)
+      }
+      if (!clientPromise) {
+        console.warn(`[GET] ⚠ MongoDB clientPromise is null - connection may have failed during initialization`)
+        console.warn(`[GET] Check server startup logs for MongoDB connection errors`)
+      }
     }
 
-    console.log(`[GET] MongoDB not configured - using in-memory storage for ${userEmail}`)
+    console.warn(`[GET] ⚠ MongoDB not configured - using in-memory storage for ${userEmail}`)
+    console.warn(`[GET] To enable MongoDB: 1) Set MONGODB_URI in .env.local, 2) Restart dev server`)
 
     // Fallback to in-memory storage (WARNING: data lost on redeploy)
     // This should only be used if MongoDB is not configured
     const products = productsStore[userEmail] || []
+    const columnConfig = productsStore[`${userEmail}_columns`] || null
+    
     return NextResponse.json(
-      { products },
+      { products, columnConfig },
       {
         headers: {
           'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
@@ -191,10 +221,15 @@ export async function POST(request: NextRequest) {
 
     // Use MongoDB if configured (persists across deployments)
     // MongoDB is the source of truth - all code updates preserve data in MongoDB
-    if (isMongoDBConfigured() && clientPromise) {
+    const mongoConfigured = isMongoDBConfigured()
+    console.log(`[POST] MongoDB check: configured=${mongoConfigured}, clientPromise=${!!clientPromise}`)
+    
+    if (mongoConfigured && clientPromise) {
       try {
+        console.log(`[POST] Attempting to connect to MongoDB...`)
         const client = await clientPromise
         if (client) {
+          console.log(`[POST] ✓ MongoDB client obtained successfully`)
           // Verify connection is still alive before operations
           try {
             await client.db("admin").command({ ping: 1 })
@@ -445,21 +480,60 @@ export async function POST(request: NextRequest) {
           )
         }
       } catch (error: any) {
-        console.error("[POST] MongoDB error, falling back to in-memory:", error.message || error)
+        console.error("[POST] ❌❌❌ MongoDB connection FAILED, falling back to in-memory storage")
+        console.error("[POST] Error details:", error.message || error)
+        console.error("[POST] Error stack:", error.stack)
         if (error.message?.includes('MongoParseError') || error.message?.includes('Protocol and host')) {
           console.error("[POST] Connection string error - check if password contains @ symbol and needs URL encoding")
+          console.error("[POST] If password is 'pass@123', encode @ as %40: 'pass%40123'")
+        }
+        if (error.message?.includes('authentication failed')) {
+          console.error("[POST] Authentication failed - check MongoDB username and password")
+        }
+        if (error.message?.includes('timeout')) {
+          console.error("[POST] Connection timeout - check network/firewall settings")
         }
         // If MongoDB fails, log error but still try in-memory fallback
         // However, this means data won't persist across deployments
+      }
+    } else {
+      if (!mongoConfigured) {
+        console.warn(`[POST] ⚠ MongoDB not configured - MONGODB_URI environment variable not found`)
+        console.warn(`[POST] Check: 1) .env.local exists, 2) MONGODB_URI is set, 3) Dev server was restarted`)
+      }
+      if (!clientPromise) {
+        console.warn(`[POST] ⚠ MongoDB clientPromise is null - connection may have failed during initialization`)
+        console.warn(`[POST] Check server startup logs for MongoDB connection errors`)
       }
     }
 
     // Fallback to in-memory storage (WARNING: data lost on redeploy)
     // Only used if MongoDB is not configured or MongoDB connection fails
-    console.log(`[POST] Using in-memory storage for ${userEmail} (MongoDB not configured or failed)`)
+    console.warn(`[POST] ⚠⚠⚠ Using in-memory storage for ${userEmail} (MongoDB not configured or failed)`)
+    console.warn(`[POST] This means data will be LOST on server restart!`)
+    console.warn(`[POST] To fix: 1) Check MONGODB_URI in .env.local, 2) Restart dev server, 3) Check MongoDB connection`)
+    
     productsStore[userEmail] = products
+    
+    // Include columnConfig in response even for memory storage (for consistency)
+    // Store it in memory too if provided
+    if (columnConfig !== undefined && Array.isArray(columnConfig)) {
+      // Store columnConfig in memory (temporary - will be lost on restart)
+      if (!productsStore[`${userEmail}_columns`]) {
+        productsStore[`${userEmail}_columns`] = {}
+      }
+      productsStore[`${userEmail}_columns`] = columnConfig
+    }
+    
     return NextResponse.json(
-      { success: true, products, saved: true, storage: 'memory', warning: 'Data will be lost on server restart' },
+      { 
+        success: true, 
+        products, 
+        saved: true, 
+        storage: 'memory', 
+        warning: 'Data will be lost on server restart - MongoDB not configured',
+        columnConfig: columnConfig || productsStore[`${userEmail}_columns`] || null
+      },
       {
         headers: {
           'Cache-Control': 'no-store, no-cache, must-revalidate',

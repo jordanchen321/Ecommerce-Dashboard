@@ -15,6 +15,20 @@ import { MongoClient } from 'mongodb'
 
 const uri = process.env.MONGODB_URI
 
+// Log MongoDB configuration status (only in development to help debug)
+if (process.env.NODE_ENV === 'development') {
+  if (uri) {
+    // Mask password in logs for security
+    const maskedUri = uri.replace(/:([^:@]+)@/, ':****@')
+    console.log('[MongoDB] ✓ MONGODB_URI is configured:', maskedUri)
+  } else {
+    console.warn('[MongoDB] ⚠ MONGODB_URI is NOT configured - data will be saved to memory only')
+    console.warn('[MongoDB] To enable MongoDB:')
+    console.warn('[MongoDB] 1. Add MONGODB_URI to your .env.local file')
+    console.warn('[MongoDB] 2. Restart your dev server (npm run dev)')
+  }
+}
+
 // Declare a type for the global object with our MongoDB client
 declare global {
   var _mongoClientPromise: Promise<MongoClient> | undefined
