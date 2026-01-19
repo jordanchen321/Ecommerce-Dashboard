@@ -45,9 +45,9 @@ export default function EditProductModal({ product, onSave, onCancel, customColu
   useEffect(() => {
     if (product) {
       setName(product.name || "")
-      setPrice(String(product.price || ""))
+      setPrice(product.priceSet === false ? "" : String(product.price ?? ""))
       setProductId(product.productId || "")
-      setQuantity(String(product.quantity || ""))
+      setQuantity(product.quantitySet === false ? "" : String(product.quantity ?? ""))
       setImagePreview(product.image || null)
       
       // Initialize custom fields from product
@@ -93,8 +93,10 @@ export default function EditProductModal({ product, onSave, onCancel, customColu
       return
     }
 
-    let priceNum: number | undefined = undefined
-    let quantityNum: number | undefined = undefined
+    let priceNum = 0
+    let quantityNum = 0
+    let priceSet = false
+    let quantitySet = false
 
     if (price.trim() !== "") {
       const parsed = parseFloat(price)
@@ -103,6 +105,7 @@ export default function EditProductModal({ product, onSave, onCancel, customColu
         return
       }
       priceNum = parsed
+      priceSet = true
     }
 
     if (quantity.trim() !== "") {
@@ -112,6 +115,7 @@ export default function EditProductModal({ product, onSave, onCancel, customColu
         return
       }
       quantityNum = parsed
+      quantitySet = true
     }
 
     // Build product object with core fields and custom fields
@@ -126,8 +130,10 @@ export default function EditProductModal({ product, onSave, onCancel, customColu
       ...product, // Preserve id and any other fields
       name,
       productId,
-      ...(priceNum !== undefined ? { price: priceNum } : { price: undefined }),
-      ...(quantityNum !== undefined ? { quantity: quantityNum } : { quantity: undefined }),
+      price: priceNum,
+      priceSet,
+      quantity: quantityNum,
+      quantitySet,
       image: imagePreview || undefined,
       ...customFieldsWithImages, // Add custom fields (with image previews)
     }

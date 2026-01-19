@@ -43,6 +43,10 @@ export function evaluateFormula(
     // Check if all referenced columns have valid values
     // If any referenced column is missing/empty/null, return null (empty)
     for (const colName of referencedColumns) {
+      // Special-case core numeric fields that can be "unset" (optional) via flags.
+      if (colName === 'price' && product.priceSet === false) return null
+      if (colName === 'quantity' && product.quantitySet === false) return null
+
       const value = product[colName]
       
       // Check if value is missing, null, undefined, or empty string

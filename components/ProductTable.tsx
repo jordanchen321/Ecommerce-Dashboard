@@ -43,6 +43,10 @@ function renderCellValue(product: Product, column: ColumnConfig): React.ReactNod
       )
 
     case 'currency': {
+      // If core fields were left empty, respect the *_Set flags
+      if (column.field === 'price' && (product as any).priceSet === false) {
+        return <span className="text-gray-400">-</span>
+      }
       if (value === '' || value === undefined || value === null) {
         return <span className="text-gray-400">-</span>
       }
@@ -54,6 +58,9 @@ function renderCellValue(product: Product, column: ColumnConfig): React.ReactNod
     }
 
     case 'number': {
+      if (column.field === 'quantity' && (product as any).quantitySet === false) {
+        return <span className="text-gray-400">-</span>
+      }
       if (value === '' || value === undefined || value === null) {
         return <span className="text-gray-400">-</span>
       }

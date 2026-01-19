@@ -50,8 +50,10 @@ export default function ProductForm({ onAdd, customColumns = [] }: ProductFormPr
       return
     }
 
-    let priceNum: number | undefined = undefined
-    let quantityNum: number | undefined = undefined
+    let priceNum: number = 0
+    let quantityNum: number = 0
+    let priceSet = false
+    let quantitySet = false
 
     if (price.trim() !== "") {
       const parsed = parseFloat(price)
@@ -60,6 +62,7 @@ export default function ProductForm({ onAdd, customColumns = [] }: ProductFormPr
         return
       }
       priceNum = parsed
+      priceSet = true
     }
 
     if (quantity.trim() !== "") {
@@ -69,6 +72,7 @@ export default function ProductForm({ onAdd, customColumns = [] }: ProductFormPr
         return
       }
       quantityNum = parsed
+      quantitySet = true
     }
 
     // Build product object with core fields and custom fields
@@ -83,8 +87,10 @@ export default function ProductForm({ onAdd, customColumns = [] }: ProductFormPr
     const productData: Omit<Product, "id"> = {
       name,
       productId,
-      ...(priceNum !== undefined ? { price: priceNum } : {}),
-      ...(quantityNum !== undefined ? { quantity: quantityNum } : {}),
+      price: priceNum,
+      priceSet,
+      quantity: quantityNum,
+      quantitySet,
       image: imagePreview || undefined,
       ...customFieldsWithImages, // Add custom fields (with image previews)
     }

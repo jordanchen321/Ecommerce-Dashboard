@@ -14,9 +14,11 @@ import { useLanguage } from "@/contexts/LanguageContext"
 export interface Product {
   id: string
   name: string
-  price?: number
+  price: number
+  priceSet?: boolean
   productId: string
-  quantity?: number
+  quantity: number
+  quantitySet?: boolean
   image?: string // Image URL or base64 data URL
   // Allow additional fields from MongoDB that may not be in the interface
   [key: string]: any
@@ -395,9 +397,11 @@ export default function Home() {
     const newProduct: Product = {
       id: Date.now().toString(),
       name: product.name || '',
-      price: product.price,
+      price: typeof product.price === 'number' ? product.price : 0,
+      priceSet: product.priceSet ?? (typeof product.price === 'number'),
       productId: product.productId || '',
-      quantity: product.quantity,
+      quantity: typeof product.quantity === 'number' ? product.quantity : 0,
+      quantitySet: product.quantitySet ?? (typeof product.quantity === 'number'),
       image: product.image,
       ...product,
     }

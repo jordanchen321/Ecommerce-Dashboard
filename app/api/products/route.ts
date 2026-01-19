@@ -21,9 +21,11 @@ export const revalidate = 0
 export interface Product {
   id: string
   name: string
-  price?: number
+  price: number
+  priceSet?: boolean
   productId: string
-  quantity?: number
+  quantity: number
+  quantitySet?: boolean
   image?: string // Image URL or base64 data URL
   // Allow additional fields from MongoDB that may not be in the interface
   [key: string]: any
@@ -48,15 +50,20 @@ function isMongoDBConfigured(): boolean {
 // Helper function to normalize and validate product data from MongoDB
 // This ensures backward compatibility when schema changes are made
 function normalizeProduct(p: any): Product {
-  const parsedPrice = typeof p.price === 'number' ? p.price : (p.price === '' || p.price === undefined || p.price === null ? undefined : parseFloat(p.price))
-  const parsedQuantity = typeof p.quantity === 'number' ? p.quantity : (p.quantity === '' || p.quantity === undefined || p.quantity === null ? undefined : parseInt(p.quantity))
+  const parsedPrice = typeof p.price === 'number' ? p.price : parseFloat(p.price)
+  const parsedQuantity = typeof p.quantity === 'number' ? p.quantity : parseInt(p.quantity)
+
+  const priceIsValid = typeof parsedPrice === 'number' && !isNaN(parsedPrice)
+  const qtyIsValid = typeof parsedQuantity === 'number' && !isNaN(parsedQuantity)
 
   return {
     id: p.id || p._id?.toString() || Date.now().toString(),
     name: p.name || '',
-    price: typeof parsedPrice === 'number' && !isNaN(parsedPrice) ? parsedPrice : undefined,
+    price: priceIsValid ? parsedPrice : 0,
+    priceSet: typeof p.priceSet === 'boolean' ? p.priceSet : priceIsValid,
     productId: p.productId || '',
-    quantity: typeof parsedQuantity === 'number' && !isNaN(parsedQuantity) ? parsedQuantity : undefined,
+    quantity: qtyIsValid ? parsedQuantity : 0,
+    quantitySet: typeof p.quantitySet === 'boolean' ? p.quantitySet : qtyIsValid,
     image: p.image || undefined,
     // Preserve any additional fields from MongoDB (for future schema extensions)
     ...Object.fromEntries(
