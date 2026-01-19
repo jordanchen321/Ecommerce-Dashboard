@@ -171,8 +171,15 @@ export default function ProductTable({ products, onRemove, onEdit, columns }: Pr
               {visibleColumns.map((column) => {
                 // Special handling for calculated fields (totalValue and formula columns)
                 if (column.field === 'totalValue') {
-                  const price = typeof product.price === 'number' ? product.price : 0
-                  const quantity = typeof product.quantity === 'number' ? product.quantity : 0
+                  const price = typeof product.price === 'number' ? product.price : undefined
+                  const quantity = typeof product.quantity === 'number' ? product.quantity : undefined
+                  if (price === undefined || quantity === undefined) {
+                    return (
+                      <td key={column.id} className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
+                        <span>-</span>
+                      </td>
+                    )
+                  }
                   return (
                     <td key={column.id} className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                       ${(price * quantity).toFixed(2)}

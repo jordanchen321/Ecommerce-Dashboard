@@ -44,22 +44,31 @@ export default function ProductForm({ onAdd, customColumns = [] }: ProductFormPr
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
 
-    if (!name || !price || !productId || !quantity) {
+    // Required fields: name + productId. Price/quantity are optional.
+    if (!name || !productId) {
       alert(t('form.error.allFields'))
       return
     }
 
-    const priceNum = parseFloat(price)
-    const quantityNum = parseInt(quantity)
+    let priceNum: number | undefined = undefined
+    let quantityNum: number | undefined = undefined
 
-    if (isNaN(priceNum) || priceNum <= 0) {
-      alert(t('form.error.validPrice'))
-      return
+    if (price.trim() !== "") {
+      const parsed = parseFloat(price)
+      if (isNaN(parsed) || parsed <= 0) {
+        alert(t('form.error.validPrice'))
+        return
+      }
+      priceNum = parsed
     }
 
-    if (isNaN(quantityNum) || quantityNum <= 0) {
-      alert(t('form.error.validQuantity'))
-      return
+    if (quantity.trim() !== "") {
+      const parsed = parseInt(quantity)
+      if (isNaN(parsed) || parsed <= 0) {
+        alert(t('form.error.validQuantity'))
+        return
+      }
+      quantityNum = parsed
     }
 
     // Build product object with core fields and custom fields
@@ -73,9 +82,9 @@ export default function ProductForm({ onAdd, customColumns = [] }: ProductFormPr
     
     const productData: Omit<Product, "id"> = {
       name,
-      price: priceNum,
       productId,
-      quantity: quantityNum,
+      ...(priceNum !== undefined ? { price: priceNum } : {}),
+      ...(quantityNum !== undefined ? { quantity: quantityNum } : {}),
       image: imagePreview || undefined,
       ...customFieldsWithImages, // Add custom fields (with image previews)
     }

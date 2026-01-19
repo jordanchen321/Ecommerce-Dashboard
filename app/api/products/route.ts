@@ -21,9 +21,9 @@ export const revalidate = 0
 export interface Product {
   id: string
   name: string
-  price: number
+  price?: number
   productId: string
-  quantity: number
+  quantity?: number
   image?: string // Image URL or base64 data URL
   // Allow additional fields from MongoDB that may not be in the interface
   [key: string]: any
@@ -48,12 +48,15 @@ function isMongoDBConfigured(): boolean {
 // Helper function to normalize and validate product data from MongoDB
 // This ensures backward compatibility when schema changes are made
 function normalizeProduct(p: any): Product {
+  const parsedPrice = typeof p.price === 'number' ? p.price : (p.price === '' || p.price === undefined || p.price === null ? undefined : parseFloat(p.price))
+  const parsedQuantity = typeof p.quantity === 'number' ? p.quantity : (p.quantity === '' || p.quantity === undefined || p.quantity === null ? undefined : parseInt(p.quantity))
+
   return {
     id: p.id || p._id?.toString() || Date.now().toString(),
     name: p.name || '',
-    price: typeof p.price === 'number' ? p.price : parseFloat(p.price) || 0,
+    price: typeof parsedPrice === 'number' && !isNaN(parsedPrice) ? parsedPrice : undefined,
     productId: p.productId || '',
-    quantity: typeof p.quantity === 'number' ? p.quantity : parseInt(p.quantity) || 0,
+    quantity: typeof parsedQuantity === 'number' && !isNaN(parsedQuantity) ? parsedQuantity : undefined,
     image: p.image || undefined,
     // Preserve any additional fields from MongoDB (for future schema extensions)
     ...Object.fromEntries(
