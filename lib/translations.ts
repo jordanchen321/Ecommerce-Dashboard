@@ -15,6 +15,7 @@ interface Translations {
   'form.price': string
   'form.quantity': string
   'form.submit': string
+  'form.update': string
   'form.error.allFields': string
   'form.error.validPrice': string
   'form.error.validQuantity': string
@@ -33,6 +34,10 @@ interface Translations {
   'table.totalValue': string
   'table.actions': string
   'table.remove': string
+  'table.edit': string
+  'modal.editProduct': string
+  'modal.save': string
+  'modal.cancel': string
   'search.placeholder': string
   'search.noResults': string
   'empty.noProducts': string
@@ -66,6 +71,7 @@ export const translations: Record<Language, Translations> = {
     'form.price': 'Price',
     'form.quantity': 'Quantity',
     'form.submit': 'Add Product',
+    'form.update': 'Update Product',
     'form.error.allFields': 'Please fill in all fields',
     'form.error.validPrice': 'Please enter a valid price',
     'form.error.validQuantity': 'Please enter a valid quantity',
@@ -84,6 +90,10 @@ export const translations: Record<Language, Translations> = {
     'table.totalValue': 'Total Value',
     'table.actions': 'Actions',
     'table.remove': 'Remove',
+    'table.edit': 'Edit',
+    'modal.editProduct': 'Edit Product',
+    'modal.save': 'Save',
+    'modal.cancel': 'Cancel',
     'search.placeholder': 'Search by Product ID...',
     'search.noResults': 'No products found matching "{term}"',
     'empty.noProducts': 'No products added yet. Add your first product!',
@@ -115,6 +125,7 @@ export const translations: Record<Language, Translations> = {
     'form.price': '价格',
     'form.quantity': '数量',
     'form.submit': '添加产品',
+    'form.update': '更新产品',
     'form.error.allFields': '请填写所有字段',
     'form.error.validPrice': '请输入有效价格',
     'form.error.validQuantity': '请输入有效数量',
@@ -133,6 +144,10 @@ export const translations: Record<Language, Translations> = {
     'table.totalValue': '总价值',
     'table.actions': '操作',
     'table.remove': '删除',
+    'table.edit': '编辑',
+    'modal.editProduct': '编辑产品',
+    'modal.save': '保存',
+    'modal.cancel': '取消',
     'search.placeholder': '按产品ID搜索...',
     'search.noResults': '未找到匹配 "{term}" 的产品',
     'empty.noProducts': '尚未添加产品。添加您的第一个产品！',

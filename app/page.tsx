@@ -7,6 +7,7 @@ import ProductTable from "@/components/ProductTable"
 import SearchBar from "@/components/SearchBar"
 import LanguageSwitcher from "@/components/LanguageSwitcher"
 import ColumnManager, { type ColumnConfig } from "@/components/ColumnManager"
+import EditProductModal from "@/components/EditProductModal"
 import { useLanguage } from "@/contexts/LanguageContext"
 
 export interface Product {
@@ -27,6 +28,7 @@ export default function Home() {
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [isLoaded, setIsLoaded] = useState(false)
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const isInitialLoadRef = useRef(true)
   const lastSavedProductsRef = useRef<Product[]>([])
   const previousEmailRef = useRef<string | null>(null)
@@ -306,6 +308,19 @@ export default function Home() {
     setProducts(products.filter((product) => product.id !== id))
   }
 
+  const handleEditProduct = (product: Product) => {
+    setEditingProduct(product)
+  }
+
+  const handleSaveProduct = (updatedProduct: Product) => {
+    setProducts(products.map((p) => (p.id === updatedProduct.id ? updatedProduct : p)))
+    setEditingProduct(null)
+  }
+
+  const handleCancelEdit = () => {
+    setEditingProduct(null)
+  }
+
   if (status === "loading") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -425,6 +440,7 @@ export default function Home() {
                 <ProductTable
                   products={filteredProducts}
                   onRemove={handleRemoveProduct}
+                  onEdit={handleEditProduct}
                   columns={columns}
                 />
               ) : (
@@ -440,6 +456,15 @@ export default function Home() {
           </div>
         </div>
       </main>
+
+      {editingProduct && (
+        <EditProductModal
+          product={editingProduct}
+          onSave={handleSaveProduct}
+          onCancel={handleCancelEdit}
+          customColumns={columns.filter(col => col.isCustom)}
+        />
+      )}
     </div>
   )
 }

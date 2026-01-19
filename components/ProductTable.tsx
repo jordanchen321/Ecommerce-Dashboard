@@ -7,6 +7,7 @@ import type { ColumnConfig } from "./ColumnManager"
 interface ProductTableProps {
   products: Product[]
   onRemove: (id: string) => void
+  onEdit: (product: Product) => void
   columns: ColumnConfig[]
 }
 
@@ -66,7 +67,7 @@ function renderCellValue(product: Product, column: ColumnConfig): React.ReactNod
   }
 }
 
-export default function ProductTable({ products, onRemove, columns }: ProductTableProps) {
+export default function ProductTable({ products, onRemove, onEdit, columns }: ProductTableProps) {
   const { t } = useLanguage()
   
   // Filter to only visible columns, and sort so actions is always last
@@ -141,12 +142,20 @@ export default function ProductTable({ products, onRemove, columns }: ProductTab
                 if (column.field === 'actions') {
                   return (
                     <td key={column.id} className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <button
-                        onClick={() => onRemove(product.id)}
-                        className="text-red-600 hover:text-red-900 transition duration-200"
-                      >
-                        {t('table.remove')}
-                      </button>
+                      <div className="flex items-center justify-end gap-3">
+                        <button
+                          onClick={() => onEdit(product)}
+                          className="text-blue-600 hover:text-blue-900 transition duration-200"
+                        >
+                          {t('table.edit')}
+                        </button>
+                        <button
+                          onClick={() => onRemove(product.id)}
+                          className="text-red-600 hover:text-red-900 transition duration-200"
+                        >
+                          {t('table.remove')}
+                        </button>
+                      </div>
                     </td>
                   )
                 }
@@ -159,12 +168,20 @@ export default function ProductTable({ products, onRemove, columns }: ProductTab
               })}
               {!visibleColumns.some(col => col.field === 'actions') && (
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                  <button
-                    onClick={() => onRemove(product.id)}
-                    className="text-red-600 hover:text-red-900 transition duration-200"
-                  >
-                    {t('table.remove')}
-                  </button>
+                  <div className="flex items-center justify-end gap-3">
+                    <button
+                      onClick={() => onEdit(product)}
+                      className="text-blue-600 hover:text-blue-900 transition duration-200"
+                    >
+                      {t('table.edit')}
+                    </button>
+                    <button
+                      onClick={() => onRemove(product.id)}
+                      className="text-red-600 hover:text-red-900 transition duration-200"
+                    >
+                      {t('table.remove')}
+                    </button>
+                  </div>
                 </td>
               )}
             </tr>
