@@ -183,9 +183,10 @@ export default function Home() {
           
           // Load column configuration if available (same pattern as products)
           // Column config is stored in MongoDB and persists across all devices and sessions
-          if (data.columnConfig && Array.isArray(data.columnConfig) && data.columnConfig.length > 0) {
+          if (Array.isArray(data.columnConfig)) {
             console.log(`[Frontend] ✓ Loaded ${data.columnConfig.length} column configurations from MongoDB (persistent across devices)`)
             console.log(`[Frontend] Column config:`, data.columnConfig.map((c: ColumnConfig) => ({ field: c.field, label: c.label, visible: c.visible, isCustom: c.isCustom })))
+            // Use exactly what is stored, even if empty, so deletions persist
             setColumns(data.columnConfig as ColumnConfig[])
             lastSavedColumnsRef.current = data.columnConfig as ColumnConfig[]
           } else {
@@ -199,12 +200,8 @@ export default function Home() {
           setIsLoaded(true)
           isInitialLoadRef.current = false
         } else {
-          // If unauthorized or error, start with empty array
+          // If unauthorized or error, log and retry without clearing existing data
           console.error(`[Frontend] Failed to load products: ${response.status} ${response.statusText}`)
-          setProducts([])
-          setFilteredProducts([])
-          lastSavedProductsRef.current = []
-          // Retry on non-OK responses (can happen briefly during auth/session propagation)
           scheduleRetry()
           return
         }
@@ -223,9 +220,7 @@ export default function Home() {
         }
         
         console.error('[Frontend] Error loading products after retries:', error)
-        setProducts([])
-        setFilteredProducts([])
-        lastSavedProductsRef.current = []
+        // Preserve existing data; just schedule a retry
         scheduleRetry()
         return
       } finally {

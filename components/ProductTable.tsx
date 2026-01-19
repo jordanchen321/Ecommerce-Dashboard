@@ -259,7 +259,12 @@ export default function ProductTable({ products, onRemove, onEdit, columns }: Pr
                           {t('table.edit')}
                         </button>
                         <button
-                          onClick={() => onRemove(product.id)}
+                          onClick={() => {
+                            const msg = t('table.confirmRemove') || 'Are you sure you want to delete this product?'
+                            if (window.confirm(msg)) {
+                              onRemove(product.id)
+                            }
+                          }}
                           className="text-red-600 hover:text-red-900 transition duration-200"
                         >
                           {t('table.remove')}
@@ -285,7 +290,12 @@ export default function ProductTable({ products, onRemove, onEdit, columns }: Pr
                       {t('table.edit')}
                     </button>
                     <button
-                      onClick={() => onRemove(product.id)}
+                      onClick={() => {
+                        const msg = t('table.confirmRemove') || 'Are you sure you want to delete this product?'
+                        if (window.confirm(msg)) {
+                          onRemove(product.id)
+                        }
+                      }}
                       className="text-red-600 hover:text-red-900 transition duration-200"
                     >
                       {t('table.remove')}

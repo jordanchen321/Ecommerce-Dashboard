@@ -35,6 +35,7 @@ interface Translations {
   'table.actions': string
   'table.remove': string
   'table.edit': string
+  'table.confirmRemove': string
   'modal.editProduct': string
   'modal.save': string
   'modal.cancel': string
@@ -51,6 +52,7 @@ interface Translations {
   'columns.type': string
   'columns.add': string
   'columns.remove': string
+  'columns.confirmRemove': string
   'columns.formula': string
   'columns.formulaPlaceholder': string
   'columns.availableColumns': string
@@ -103,6 +105,7 @@ export const translations: Record<Language, Translations> = {
     'table.actions': 'Actions',
     'table.remove': 'Remove',
     'table.edit': 'Edit',
+    'table.confirmRemove': 'Are you sure you want to delete this product?',
     'modal.editProduct': 'Edit Product',
     'modal.save': 'Save',
     'modal.cancel': 'Cancel',
@@ -119,6 +122,7 @@ export const translations: Record<Language, Translations> = {
     'columns.type': 'Type',
     'columns.add': 'Add Column',
     'columns.remove': 'Remove column',
+    'columns.confirmRemove': 'Delete column "{name}"? This cannot be undone.',
     'columns.formula': 'Formula (Calculated)',
     'columns.formulaPlaceholder': 'e.g., price * quantity, (price - discount) * quantity',
     'columns.availableColumns': 'Available columns:',
@@ -169,6 +173,7 @@ export const translations: Record<Language, Translations> = {
     'table.actions': '操作',
     'table.remove': '删除',
     'table.edit': '编辑',
+    'table.confirmRemove': '确定要删除此产品吗？',
     'modal.editProduct': '编辑产品',
     'modal.save': '保存',
     'modal.cancel': '取消',
@@ -185,6 +190,7 @@ export const translations: Record<Language, Translations> = {
     'columns.type': '类型',
     'columns.add': '添加列',
     'columns.remove': '删除列',
+    'columns.confirmRemove': '确定要删除列“{name}”吗？此操作无法撤销。',
     'columns.formula': '公式（计算）',
     'columns.formulaPlaceholder': '例如：price * quantity, (price - discount) * quantity',
     'columns.availableColumns': '可用列：',

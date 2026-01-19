@@ -74,6 +74,9 @@ export default function ColumnManager({ columns, onColumnsChange, availableField
     // Allow removing custom columns, and allow removing Total Value (special core calculated column)
     const column = columns.find(col => col.id === columnId)
     if (column && (column.isCustom || column.field === 'totalValue')) {
+      const label = column.label || column.field
+      const message = (t('columns.confirmRemove') || 'Delete column "{name}"? This cannot be undone.').replace('{name}', label)
+      if (!window.confirm(message)) return
       const updated = columns.filter(col => col.id !== columnId)
       onColumnsChange(updated)
     }
