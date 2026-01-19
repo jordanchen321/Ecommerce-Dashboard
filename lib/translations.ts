@@ -67,6 +67,8 @@ interface Translations {
   'formulaEditor.hint': string
   'formulaEditor.empty': string
   'formulaEditor.error.required': string
+  'confirm.title': string
+  'confirm.delete': string
 }
 
 export const translations: Record<Language, Translations> = {
@@ -137,6 +139,8 @@ export const translations: Record<Language, Translations> = {
     'formulaEditor.hint': 'Edit formulas here. Only numeric columns can be referenced.',
     'formulaEditor.empty': 'No formula columns yet. Create one from Manage Columns.',
     'formulaEditor.error.required': 'Please enter a formula expression',
+    'confirm.title': 'Confirm Deletion',
+    'confirm.delete': 'Delete',
   },
   zh: {
     'app.title': '电商仪表板',
@@ -205,6 +209,8 @@ export const translations: Record<Language, Translations> = {
     'formulaEditor.hint': '在这里编辑公式。只能引用数字列。',
     'formulaEditor.empty': '还没有公式列。请从“管理列”中创建。',
     'formulaEditor.error.required': '请输入公式表达式',
+    'confirm.title': '确认删除',
+    'confirm.delete': '删除',
   },
 }
 

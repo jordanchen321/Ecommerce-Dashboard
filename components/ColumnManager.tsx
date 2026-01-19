@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { useLanguage } from "@/contexts/LanguageContext"
+import ConfirmModal from "./ConfirmModal"
 
 export interface ColumnConfig {
   id: string
@@ -26,6 +27,11 @@ export default function ColumnManager({ columns, onColumnsChange, availableField
   const [newColumnType, setNewColumnType] = useState<'text' | 'number' | 'currency' | 'date' | 'image' | 'formula'>('text')
   const [newColumnFormula, setNewColumnFormula] = useState("")
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const [confirmState, setConfirmState] = useState<{ isOpen: boolean; columnId: string | null; columnLabel: string }>({
+    isOpen: false,
+    columnId: null,
+    columnLabel: '',
+  })
   
   // Get available column names for formula suggestions (only numeric columns)
   // Numeric columns: 'number', 'currency' types, and core numeric fields (price, quantity)
@@ -74,12 +80,17 @@ export default function ColumnManager({ columns, onColumnsChange, availableField
     // Allow removing custom columns, and allow removing Total Value (special core calculated column)
     const column = columns.find(col => col.id === columnId)
     if (column && (column.isCustom || column.field === 'totalValue')) {
-      const label = column.label || column.field
-      const message = (t('columns.confirmRemove') || 'Delete column "{name}"? This cannot be undone.').replace('{name}', label)
-      if (!window.confirm(message)) return
-      const updated = columns.filter(col => col.id !== columnId)
+      const label = getDisplayLabel(column)
+      setConfirmState({ isOpen: true, columnId, columnLabel: label })
+    }
+  }
+
+  const handleConfirmRemove = () => {
+    if (confirmState.columnId) {
+      const updated = columns.filter(col => col.id !== confirmState.columnId)
       onColumnsChange(updated)
     }
+    setConfirmState({ isOpen: false, columnId: null, columnLabel: '' })
   }
 
   const addColumn = () => {
@@ -346,6 +357,13 @@ export default function ColumnManager({ columns, onColumnsChange, availableField
           </div>
         </>
       )}
+      
+      <ConfirmModal
+        isOpen={confirmState.isOpen}
+        message={(t('columns.confirmRemove') || 'Delete column "{name}"? This cannot be undone.').replace('{name}', confirmState.columnLabel)}
+        onConfirm={handleConfirmRemove}
+        onCancel={() => setConfirmState({ isOpen: false, columnId: null, columnLabel: '' })}
+      />
     </div>
   )
 }

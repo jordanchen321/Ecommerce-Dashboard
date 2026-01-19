@@ -132,10 +132,17 @@ export async function GET() {
           
           // Also fetch column configuration if it exists (same pattern as products)
           // Column config is stored per user and persists across all devices
-          const columnConfig = userProduct?.columnConfig || null
+          // CRITICAL: Return empty array if it exists (even if empty) to preserve deletions
+          const columnConfig = Array.isArray(userProduct?.columnConfig) 
+            ? userProduct.columnConfig 
+            : (userProduct?.columnConfig !== undefined ? userProduct.columnConfig : null)
           
-          if (columnConfig && Array.isArray(columnConfig) && columnConfig.length > 0) {
-            console.log(`[GET] ✓ Loaded ${columnConfig.length} column configurations from MongoDB for ${userEmail} (persistent across devices)`)
+          if (Array.isArray(columnConfig)) {
+            if (columnConfig.length > 0) {
+              console.log(`[GET] ✓ Loaded ${columnConfig.length} column configurations from MongoDB for ${userEmail} (persistent across devices)`)
+            } else {
+              console.log(`[GET] ✓ Loaded empty column config from MongoDB for ${userEmail} (user deleted all columns - preserving deletion)`)
+            }
           } else {
             console.log(`[GET] No column config found in MongoDB for ${userEmail}, will use defaults (will be saved on first change)`)
           }

@@ -1,9 +1,11 @@
 "use client"
 
+import { useState } from "react"
 import type { Product } from "@/app/page"
 import { useLanguage } from "@/contexts/LanguageContext"
 import type { ColumnConfig } from "./ColumnManager"
 import { evaluateFormula } from "@/lib/formulaEvaluator"
+import ConfirmModal from "./ConfirmModal"
 
 interface ProductTableProps {
   products: Product[]
@@ -92,6 +94,10 @@ function renderCellValue(product: Product, column: ColumnConfig): React.ReactNod
 
 export default function ProductTable({ products, onRemove, onEdit, columns }: ProductTableProps) {
   const { t } = useLanguage()
+  const [confirmState, setConfirmState] = useState<{ isOpen: boolean; productId: string | null }>({
+    isOpen: false,
+    productId: null,
+  })
 
   const getDisplayLabel = (column: ColumnConfig): string => {
     // Always translate core/default columns at render time
@@ -260,10 +266,7 @@ export default function ProductTable({ products, onRemove, onEdit, columns }: Pr
                         </button>
                         <button
                           onClick={() => {
-                            const msg = t('table.confirmRemove') || 'Are you sure you want to delete this product?'
-                            if (window.confirm(msg)) {
-                              onRemove(product.id)
-                            }
+                            setConfirmState({ isOpen: true, productId: product.id })
                           }}
                           className="text-red-600 hover:text-red-900 transition duration-200"
                         >
@@ -291,10 +294,7 @@ export default function ProductTable({ products, onRemove, onEdit, columns }: Pr
                     </button>
                     <button
                       onClick={() => {
-                        const msg = t('table.confirmRemove') || 'Are you sure you want to delete this product?'
-                        if (window.confirm(msg)) {
-                          onRemove(product.id)
-                        }
+                        setConfirmState({ isOpen: true, productId: product.id })
                       }}
                       className="text-red-600 hover:text-red-900 transition duration-200"
                     >
@@ -307,6 +307,18 @@ export default function ProductTable({ products, onRemove, onEdit, columns }: Pr
           ))}
         </tbody>
       </table>
+      
+      <ConfirmModal
+        isOpen={confirmState.isOpen}
+        message={t('table.confirmRemove') || 'Are you sure you want to delete this product?'}
+        onConfirm={() => {
+          if (confirmState.productId) {
+            onRemove(confirmState.productId)
+          }
+          setConfirmState({ isOpen: false, productId: null })
+        }}
+        onCancel={() => setConfirmState({ isOpen: false, productId: null })}
+      />
     </div>
   )
 }

@@ -132,8 +132,58 @@ export default function Home() {
         // Trigger another run after a short delay (handles transient auth/network hiccups)
         setTimeout(() => setLoadNonce((n) => n + 1), 1500)
       }
+
+      // NextAuth can briefly report authenticated on the client while the server session
+      // isn't ready yet (cookie not propagated). This causes intermittent 401s.
+      // We gate the real data fetch on /api/products/status returning 200.
+      const waitForServerSession = async () => {
+        const maxWaitMs = 4000
+        const start = Date.now()
+        let attempt = 0
+
+        while (Date.now() - start < maxWaitMs && !abortController.signal.aborted) {
+          attempt += 1
+          try {
+            const statusRes = await fetch('/api/products/status?' + new URLSearchParams({ _t: Date.now().toString() }), {
+              cache: 'no-store',
+              signal: abortController.signal,
+              headers: {
+                'Cache-Control': 'no-cache',
+                'Pragma': 'no-cache',
+              },
+            })
+
+            if (abortController.signal.aborted) return false
+
+            if (statusRes.ok) {
+              return true
+            }
+
+            // 401 during session propagation -> wait and retry
+            if (statusRes.status === 401) {
+              await new Promise((r) => setTimeout(r, Math.min(800, 150 + attempt * 150)))
+              continue
+            }
+
+            // Any other server error: treat as retryable after short delay
+            await new Promise((r) => setTimeout(r, 250))
+          } catch (e: any) {
+            if (e?.name === 'AbortError') return false
+            await new Promise((r) => setTimeout(r, 250))
+          }
+        }
+
+        return false
+      }
       
       try {
+        const serverReady = await waitForServerSession()
+        if (!serverReady) {
+          console.warn('[Frontend] Server session not ready yet; retrying load shortly...')
+          scheduleRetry()
+          return
+        }
+
         const response = await fetch('/api/products?' + new URLSearchParams({ 
           _t: Date.now().toString() // Cache busting
         }), {
