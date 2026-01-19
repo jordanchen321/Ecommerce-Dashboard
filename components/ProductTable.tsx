@@ -163,10 +163,11 @@ export default function ProductTable({ products, onRemove, onEdit, columns }: Pr
                   
                   const result = evaluateFormula(column.formula, product, availableColumns)
                   
+                  // If result is null, it means required columns are missing - show empty
                   if (result === null) {
                     return (
-                      <td key={column.id} className="px-6 py-4 whitespace-nowrap text-sm text-red-500">
-                        <span title="Formula evaluation error">Error</span>
+                      <td key={column.id} className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
+                        <span>-</span>
                       </td>
                     )
                   }

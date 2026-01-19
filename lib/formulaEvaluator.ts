@@ -29,10 +29,38 @@ export function evaluateFormula(
       col !== 'actions' && col !== 'totalValue'
     )
     
-    // Replace column names with their numeric values
-    // Sort by length (longest first) to avoid partial matches
+    // First, check which columns are actually referenced in the formula
+    const referencedColumns: string[] = []
     const sortedColumns = columnNames.sort((a, b) => b.length - a.length)
     
+    for (const colName of sortedColumns) {
+      const regex = new RegExp(`\\b${escapeRegex(colName)}\\b`, 'gi')
+      if (regex.test(expression)) {
+        referencedColumns.push(colName)
+      }
+    }
+    
+    // Check if all referenced columns have valid values
+    // If any referenced column is missing/empty/null, return null (empty)
+    for (const colName of referencedColumns) {
+      const value = product[colName]
+      
+      // Check if value is missing, null, undefined, or empty string
+      if (value === undefined || value === null || value === '') {
+        return null // Return null to indicate empty (not an error, just missing data)
+      }
+      
+      // For string values, check if they're valid numbers
+      if (typeof value === 'string') {
+        const parsed = parseFloat(value)
+        if (isNaN(parsed)) {
+          return null // Invalid number string, treat as empty
+        }
+      }
+    }
+    
+    // All referenced columns have values, proceed with calculation
+    // Replace column names with their numeric values
     for (const colName of sortedColumns) {
       const value = product[colName]
       let numValue: number
