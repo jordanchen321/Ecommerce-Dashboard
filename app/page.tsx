@@ -32,6 +32,8 @@ export default function Home() {
   const isInitialLoadRef = useRef(true)
   const lastSavedProductsRef = useRef<Product[]>([])
   const previousEmailRef = useRef<string | null>(null)
+  const isLoadingRef = useRef(false) // Prevent duplicate fetches
+  const abortControllerRef = useRef<AbortController | null>(null)
   
   // Default column configuration function
   const getDefaultColumns = (): ColumnConfig[] => [
@@ -56,6 +58,13 @@ export default function Home() {
 
     // Only clear products if user explicitly signed out (session was set before and now is null)
     if (!session?.user?.email) {
+      // Cancel any in-flight requests
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+        abortControllerRef.current = null
+      }
+      isLoadingRef.current = false
+      
       // Only clear if we had a previous session (user signed out)
       if (previousEmailRef.current !== null) {
         setProducts([])
@@ -72,6 +81,13 @@ export default function Home() {
 
     // If email changed (different user), reset state
     if (previousEmailRef.current !== null && previousEmailRef.current !== currentEmail) {
+      // Cancel any in-flight requests for previous user
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+        abortControllerRef.current = null
+      }
+      isLoadingRef.current = false
+      
       setProducts([])
       setFilteredProducts([])
       setSearchTerm("")
@@ -79,25 +95,53 @@ export default function Home() {
       isInitialLoadRef.current = true
     }
 
-    // Skip if we already loaded for this user
-    if (previousEmailRef.current === currentEmail && isLoaded) {
+    // Skip if we already loaded for this user OR if we're currently loading
+    if ((previousEmailRef.current === currentEmail && isLoaded) || isLoadingRef.current) {
       return
     }
 
+    // Mark as loading and create abort controller
+    isLoadingRef.current = true
     previousEmailRef.current = currentEmail
+    
+    // Cancel any previous request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+    
+    const abortController = new AbortController()
+    abortControllerRef.current = abortController
 
-    // Fetch products from API (with cache-busting)
-    const fetchProducts = async () => {
+    // Fetch products from API (with cache-busting and abort signal)
+    const fetchProducts = async (retryCount = 0) => {
+      const maxRetries = 2
+      
       try {
-        const response = await fetch('/api/products', {
+        const response = await fetch('/api/products?' + new URLSearchParams({ 
+          _t: Date.now().toString() // Cache busting
+        }), {
           cache: 'no-store',
+          signal: abortController.signal,
           headers: {
             'Cache-Control': 'no-cache',
             'Pragma': 'no-cache',
           },
         })
+        
+        // Check if request was aborted
+        if (abortController.signal.aborted) {
+          console.log('[Frontend] Request was aborted')
+          return
+        }
+        
         if (response.ok) {
           const data = await response.json()
+          
+          // Double-check we're still loading for the same user (prevent race conditions)
+          if (previousEmailRef.current !== currentEmail || abortController.signal.aborted) {
+            console.log('[Frontend] User changed or request aborted, ignoring response')
+            return
+          }
           
           // Load products from MongoDB (same pattern as columns)
           // Products are stored in MongoDB and persist across all devices and sessions
@@ -131,27 +175,57 @@ export default function Home() {
             setColumns(defaultCols)
             lastSavedColumnsRef.current = defaultCols
           }
+          
+          setIsLoaded(true)
+          isInitialLoadRef.current = false
         } else {
           // If unauthorized or error, start with empty array
           console.error(`[Frontend] Failed to load products: ${response.status} ${response.statusText}`)
           setProducts([])
           setFilteredProducts([])
           lastSavedProductsRef.current = []
+          setIsLoaded(true)
+          isInitialLoadRef.current = false
         }
-        setIsLoaded(true)
-        isInitialLoadRef.current = false
-      } catch (error) {
-        console.error('[Frontend] Error loading products:', error)
+      } catch (error: any) {
+        // Ignore abort errors
+        if (error.name === 'AbortError') {
+          console.log('[Frontend] Request was aborted')
+          return
+        }
+        
+        // Retry on network errors
+        if (retryCount < maxRetries && !abortController.signal.aborted) {
+          console.warn(`[Frontend] Error loading products (attempt ${retryCount + 1}/${maxRetries + 1}), retrying...`, error)
+          await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1))) // Exponential backoff
+          return fetchProducts(retryCount + 1)
+        }
+        
+        console.error('[Frontend] Error loading products after retries:', error)
         setProducts([])
         setFilteredProducts([])
         lastSavedProductsRef.current = []
         setIsLoaded(true)
         isInitialLoadRef.current = false
+      } finally {
+        isLoadingRef.current = false
+        if (abortControllerRef.current === abortController) {
+          abortControllerRef.current = null
+        }
       }
     }
 
     fetchProducts()
-  }, [session?.user?.email, status, isLoaded])
+    
+    // Cleanup: abort request if component unmounts or dependencies change
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+        abortControllerRef.current = null
+      }
+      isLoadingRef.current = false
+    }
+  }, [session?.user?.email, status]) // Removed isLoaded from dependencies to prevent loops
 
   // Save products to API whenever products change (tied to user email)
   // CRITICAL: Only save after initial data is loaded and only if products actually changed

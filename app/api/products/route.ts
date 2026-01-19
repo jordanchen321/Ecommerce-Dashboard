@@ -177,26 +177,37 @@ export async function GET() {
     const products = productsStore[userEmail] || []
     const columnConfig = columnConfigStore[userEmail] || null
     
+    // Ensure consistent response format
+    const normalizedProducts = Array.isArray(products) ? products.map(normalizeProduct) : []
+    
+    console.log(`[GET] Using in-memory storage for ${userEmail}: ${normalizedProducts.length} products`)
+    
     return NextResponse.json(
-      { products, columnConfig },
+      { 
+        products: normalizedProducts, 
+        columnConfig: Array.isArray(columnConfig) ? columnConfig : null 
+      },
       {
         headers: {
           'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
           'Pragma': 'no-cache',
           'Expires': '0',
+          'Surrogate-Control': 'no-store',
         },
       }
     )
   } catch (error) {
     console.error("[GET] Error fetching products:", error)
-    // On error, return empty array - don't crash the app
+    // On error, return empty array with consistent format - don't crash the app
     // But log the error so we know data fetch failed
     return NextResponse.json(
-      { products: [] },
+      { products: [], columnConfig: null },
       {
         headers: {
-          'Cache-Control': 'no-store, no-cache, must-revalidate',
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
           'Pragma': 'no-cache',
+          'Expires': '0',
+          'Surrogate-Control': 'no-store',
         },
       }
     )
