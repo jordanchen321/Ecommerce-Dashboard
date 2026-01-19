@@ -103,7 +103,29 @@ export async function GET() {
           const collection = db.collection("products")
           
           // Always fetch from MongoDB - data persists regardless of code changes
-          const userProduct = await collection.findOne({ userEmail })
+          // Document structure: { gmail, products, columnConfigs, updatedAt }
+          // Support both old (userEmail, columnConfig) and new (gmail, columnConfigs) field names for migration
+          let userProduct = await collection.findOne({ gmail: userEmail })
+          if (!userProduct) {
+            // Try old field name for backward compatibility
+            userProduct = await collection.findOne({ userEmail })
+            if (userProduct) {
+              // Migrate old document to new structure
+              console.log(`[GET] Migrating document from old structure (userEmail) to new structure (gmail)`)
+              await collection.updateOne(
+                { userEmail },
+                { 
+                  $set: { 
+                    gmail: userEmail,
+                    columnConfigs: userProduct.columnConfig || null
+                  },
+                  $unset: { userEmail: "", columnConfig: "" }
+                }
+              )
+              userProduct = await collection.findOne({ gmail: userEmail })
+            }
+          }
+          
           const rawProducts = (userProduct?.products || []) as any[]
           
           // Normalize products: ensure all required fields exist with defaults if missing
@@ -126,9 +148,14 @@ export async function GET() {
           // Also fetch column configuration if it exists (same pattern as products)
           // Column config is stored per user and persists across all devices
           // CRITICAL: Return empty array if it exists (even if empty) to preserve deletions
-          const columnConfig = Array.isArray(userProduct?.columnConfig) 
-            ? userProduct.columnConfig 
-            : (userProduct?.columnConfig !== undefined ? userProduct.columnConfig : null)
+          // Support both old (columnConfig) and new (columnConfigs) field names
+          const columnConfig = Array.isArray(userProduct?.columnConfigs) 
+            ? userProduct.columnConfigs 
+            : (Array.isArray(userProduct?.columnConfig) 
+              ? userProduct.columnConfig 
+              : (userProduct?.columnConfigs !== undefined || userProduct?.columnConfig !== undefined 
+                ? (userProduct?.columnConfigs || userProduct?.columnConfig || null) 
+                : null))
           
           if (Array.isArray(columnConfig)) {
             if (columnConfig.length > 0) {
@@ -277,30 +304,52 @@ export async function POST(request: NextRequest) {
           // CRITICAL: Use upsert to preserve data integrity
           // - If document exists: Update it with new products
           // - If document doesn't exist: Create new document with products
-          // - userEmail is the unique key - ensures each user's data is separate
+          // - gmail is the unique key - ensures each user's data is separate
           // - This operation is atomic and safe across deployments
+          // Document structure: { gmail, products, columnConfigs, updatedAt }
+          
+          // Check for existing document with new structure (gmail) or old structure (userEmail)
+          let existingDoc = await collection.findOne({ gmail: userEmail })
+          if (!existingDoc) {
+            existingDoc = await collection.findOne({ userEmail })
+            if (existingDoc) {
+              // Migrate old document to new structure
+              console.log(`[POST] Migrating document from old structure (userEmail, columnConfig) to new structure (gmail, columnConfigs)`)
+              await collection.updateOne(
+                { userEmail },
+                { 
+                  $set: { 
+                    gmail: userEmail,
+                    columnConfigs: existingDoc.columnConfig || null
+                  },
+                  $unset: { userEmail: "", columnConfig: "" }
+                }
+              )
+              existingDoc = await collection.findOne({ gmail: userEmail })
+            }
+          }
           
           // Log before save for debugging
-          const beforeSave = await collection.findOne({ userEmail })
-          const beforeCount = beforeSave?.products?.length || 0
+          const beforeCount = existingDoc?.products?.length || 0
           
-          // Get existing document to preserve columnConfig if not provided
-          const existingDoc = await collection.findOne({ userEmail })
-          const existingColumnConfig = existingDoc?.columnConfig || null
+          // Get existing columnConfigs (support both old and new field names)
+          const existingColumnConfigs = Array.isArray(existingDoc?.columnConfigs) 
+            ? existingDoc.columnConfigs 
+            : (Array.isArray(existingDoc?.columnConfig) ? existingDoc.columnConfig : null)
           
-          // Build update object - save products (always) and columnConfig (if provided or exists)
+          // Build update object - save products (always) and columnConfigs (if provided or exists)
+          // Document structure: { gmail: "user@email.com", products: [...], columnConfigs: [...] | null, updatedAt: Date }
           const updateData: any = {
-            userEmail,
+            gmail: userEmail,
             products,
             updatedAt: new Date()
           }
           
-          // CRITICAL: Save columnConfig EXACTLY like products - ALWAYS ensure it's in the document
-          // MongoDB document MUST have: userEmail, products, columnConfig
-          // Document structure: { userEmail: "user@email.com", products: [...], columnConfig: [...] | null, updatedAt: Date }
+          // CRITICAL: Save columnConfigs EXACTLY like products - ALWAYS ensure it's in the document
+          // MongoDB document MUST have: gmail, products, columnConfigs
           if (columnConfig !== undefined) {
             // ALWAYS save when provided - same unconditional save as products
-            updateData.columnConfig = columnConfig
+            updateData.columnConfigs = columnConfig
             if (Array.isArray(columnConfig)) {
               const customCols = columnConfig.filter((c: ColumnConfig) => c.isCustom)
               console.log(`[POST] 💾 SAVING column configuration to MongoDB for ${userEmail}: ${columnConfig.length} total columns (${customCols.length} custom)`)
@@ -310,38 +359,40 @@ export async function POST(request: NextRequest) {
             } else {
               console.log(`[POST] ⚠ Column config is not an array:`, typeof columnConfig, columnConfig)
             }
-          } else if (existingColumnConfig !== null && existingColumnConfig !== undefined) {
+          } else if (existingColumnConfigs !== null && existingColumnConfigs !== undefined) {
             // Not provided - preserve existing (same as products preservation logic)
-            updateData.columnConfig = existingColumnConfig
-            console.log(`[POST] Preserving existing column configuration: ${Array.isArray(existingColumnConfig) ? existingColumnConfig.length : 'invalid'} columns`)
+            updateData.columnConfigs = existingColumnConfigs
+            console.log(`[POST] Preserving existing column configuration: ${Array.isArray(existingColumnConfigs) ? existingColumnConfigs.length : 'invalid'} columns`)
           } else {
-            // No columnConfig provided and none exists - set to null to ensure field exists in document
-            updateData.columnConfig = null
-            console.log(`[POST] No columnConfig provided and none exists - setting to null (will use defaults on next load)`)
+            // No columnConfigs provided and none exists - set to null to ensure field exists in document
+            updateData.columnConfigs = null
+            console.log(`[POST] No columnConfigs provided and none exists - setting to null (will use defaults on next load)`)
           }
           
-          // VERIFY: Ensure columnConfig is in updateData before saving
-          // The MongoDB document structure should ALWAYS have: { userEmail, products, columnConfig }
-          if (!('columnConfig' in updateData)) {
-            console.error(`[POST] ❌❌❌ CRITICAL ERROR: columnConfig is NOT in updateData!`)
-            updateData.columnConfig = null // Force include it
+          // VERIFY: Ensure columnConfigs is in updateData before saving
+          // The MongoDB document structure should ALWAYS have: { gmail, products, columnConfigs }
+          if (!('columnConfigs' in updateData)) {
+            console.error(`[POST] ❌❌❌ CRITICAL ERROR: columnConfigs is NOT in updateData!`)
+            updateData.columnConfigs = null // Force include it
           }
           
           // Save to MongoDB using upsert - EXACT same pattern as products
-          // Document structure: { userEmail, products, columnConfig, updatedAt }
-          // ALL THREE fields (userEmail, products, columnConfig) must be saved
+          // Document structure: { gmail, products, columnConfigs, updatedAt }
+          // ALL THREE fields (gmail, products, columnConfigs) must be saved
           console.log(`[POST] 💾 Saving to MongoDB for ${userEmail}`)
           console.log(`[POST] Document structure being saved:`)
-          console.log(`[POST]   - userEmail: "${updateData.userEmail}"`)
+          console.log(`[POST]   - gmail: "${updateData.gmail}"`)
           console.log(`[POST]   - products: ${updateData.products.length} items`)
-          console.log(`[POST]   - columnConfig: ${updateData.columnConfig ? (Array.isArray(updateData.columnConfig) ? `${updateData.columnConfig.length} columns` : 'invalid type') : 'not included (will preserve existing or be missing)'}`)
+          console.log(`[POST]   - columnConfigs: ${updateData.columnConfigs ? (Array.isArray(updateData.columnConfigs) ? `${updateData.columnConfigs.length} columns` : 'invalid type') : 'not included (will preserve existing or be missing)'}`)
           console.log(`[POST]   - updatedAt: ${updateData.updatedAt}`)
           
-          // Save with upsert - same as products
+          // Save with upsert - use gmail as the key
+          // Also remove old fields if they exist (migration cleanup)
           const result = await collection.updateOne(
-            { userEmail },
+            { gmail: userEmail },
             { 
-              $set: updateData
+              $set: updateData,
+              $unset: { userEmail: "", columnConfig: "" } // Remove old field names if they exist
             },
             { upsert: true }
           )
@@ -352,52 +403,52 @@ export async function POST(request: NextRequest) {
           // If not saved in main update, force save it separately
           if (columnConfig !== undefined && Array.isArray(columnConfig)) {
             // Verify it was actually saved
-            const verifyDoc = await collection.findOne({ userEmail })
-            const verifyColumnConfig = verifyDoc?.columnConfig
-            if (!verifyColumnConfig || JSON.stringify(verifyColumnConfig) !== JSON.stringify(columnConfig)) {
-              console.log(`[POST] ⚠ ColumnConfig verification failed - force saving separately...`)
+            const verifyDoc = await collection.findOne({ gmail: userEmail })
+            const verifyColumnConfigs = verifyDoc?.columnConfigs
+            if (!verifyColumnConfigs || JSON.stringify(verifyColumnConfigs) !== JSON.stringify(columnConfig)) {
+              console.log(`[POST] ⚠ ColumnConfigs verification failed - force saving separately...`)
               const forceResult = await collection.updateOne(
-                { userEmail },
-                { $set: { columnConfig } },
+                { gmail: userEmail },
+                { $set: { columnConfigs: columnConfig } },
                 { upsert: true }
               )
               console.log(`[POST] Force save result: modified=${forceResult.modifiedCount}, inserted=${forceResult.upsertedCount}`)
               
               // Verify again
-              const finalVerify = await collection.findOne({ userEmail })
-              const finalColumnConfig = finalVerify?.columnConfig
-              if (Array.isArray(finalColumnConfig) && JSON.stringify(finalColumnConfig) === JSON.stringify(columnConfig)) {
-                console.log(`[POST] ✓✓✓ ColumnConfig successfully force-saved and verified`)
+              const finalVerify = await collection.findOne({ gmail: userEmail })
+              const finalColumnConfigs = finalVerify?.columnConfigs
+              if (Array.isArray(finalColumnConfigs) && JSON.stringify(finalColumnConfigs) === JSON.stringify(columnConfig)) {
+                console.log(`[POST] ✓✓✓ ColumnConfigs successfully force-saved and verified`)
               } else {
-                console.error(`[POST] ❌❌❌ ColumnConfig force save FAILED`)
+                console.error(`[POST] ❌❌❌ ColumnConfigs force save FAILED`)
               }
             }
           }
           
           // Verify data was saved correctly - ensure ALL THREE fields are in MongoDB
-          // Document structure: { userEmail, products, columnConfig, updatedAt }
-          const afterSave = await collection.findOne({ userEmail })
+          // Document structure: { gmail, products, columnConfigs, updatedAt }
+          const afterSave = await collection.findOne({ gmail: userEmail })
           const afterCount = afterSave?.products?.length || 0
-          const savedColumnConfig = afterSave?.columnConfig || null
-          const savedUserEmail = afterSave?.userEmail || null
+          const savedColumnConfigs = afterSave?.columnConfigs || null
+          const savedGmail = afterSave?.gmail || null
           
           console.log(`[POST] MongoDB save for ${userEmail}: ${result.modifiedCount} modified, ${result.upsertedCount} inserted`)
           console.log(`[POST] Products: ${products.length} saved, verified: ${afterCount} in DB`)
           
           // Verify complete document structure - all three fields should be present
           console.log(`[POST] 📋 MongoDB Document Structure Verification:`)
-          console.log(`[POST]   ✓ userEmail: ${savedUserEmail ? `"${savedUserEmail}"` : '❌ MISSING'}`)
+          console.log(`[POST]   ✓ gmail: ${savedGmail ? `"${savedGmail}"` : '❌ MISSING'}`)
           console.log(`[POST]   ✓ products: ${afterSave?.products ? `${afterCount} items` : '❌ MISSING'}`)
-          console.log(`[POST]   ✓ columnConfig: ${savedColumnConfig ? (Array.isArray(savedColumnConfig) ? `${savedColumnConfig.length} columns` : 'invalid type') : '❌ MISSING'}`)
+          console.log(`[POST]   ✓ columnConfigs: ${savedColumnConfigs ? (Array.isArray(savedColumnConfigs) ? `${savedColumnConfigs.length} columns` : 'invalid type') : '❌ MISSING'}`)
           console.log(`[POST]   ✓ updatedAt: ${afterSave?.updatedAt ? 'present' : 'missing'}`)
           
           // If any critical field is missing, log error
-          if (!savedUserEmail || !afterSave?.products || savedColumnConfig === null) {
+          if (!savedGmail || !afterSave?.products || savedColumnConfigs === null) {
             console.error(`[POST] ❌❌❌ CRITICAL: Document structure incomplete!`)
             console.error(`[POST] Missing fields:`, {
-              userEmail: !savedUserEmail,
+              gmail: !savedGmail,
               products: !afterSave?.products,
-              columnConfig: savedColumnConfig === null
+              columnConfigs: savedColumnConfigs === null
             })
           } else {
             console.log(`[POST] ✓✓✓ Document structure complete - all fields present in MongoDB`)
@@ -406,8 +457,8 @@ export async function POST(request: NextRequest) {
           // Verify column configuration was saved (same verification as products)
           if (columnConfig !== undefined) {
             if (Array.isArray(columnConfig)) {
-              if (Array.isArray(savedColumnConfig)) {
-                const columnConfigSaved = JSON.stringify(savedColumnConfig) === JSON.stringify(columnConfig)
+              if (Array.isArray(savedColumnConfigs)) {
+                const columnConfigSaved = JSON.stringify(savedColumnConfigs) === JSON.stringify(columnConfig)
                 if (columnConfigSaved) {
                   const customCols = columnConfig.filter((c: ColumnConfig) => c.isCustom)
                   console.log(`[POST] ✓✓✓ Column configuration VERIFIED in MongoDB for ${userEmail}: ${columnConfig.length} total columns (${customCols.length} custom)`)
@@ -416,33 +467,33 @@ export async function POST(request: NextRequest) {
                   }
                 } else {
                   console.error(`[POST] ❌❌❌ Column configuration VERIFICATION FAILED for ${userEmail}`)
-                  console.error(`[POST] Expected: ${columnConfig.length} columns, Saved: ${savedColumnConfig.length} columns`)
+                  console.error(`[POST] Expected: ${columnConfig.length} columns, Saved: ${savedColumnConfigs.length} columns`)
                   const expectedFields = columnConfig.map((c: ColumnConfig) => c.field).sort()
-                  const savedFields = savedColumnConfig.map((c: ColumnConfig) => c.field).sort()
+                  const savedFields = savedColumnConfigs.map((c: ColumnConfig) => c.field).sort()
                   console.error(`[POST] Expected fields:`, expectedFields)
                   console.error(`[POST] Saved fields:`, savedFields)
                   // Try to save again as fallback
                   console.log(`[POST] Attempting to re-save column configuration...`)
                   await collection.updateOne(
-                    { userEmail },
-                    { $set: { columnConfig } },
+                    { gmail: userEmail },
+                    { $set: { columnConfigs: columnConfig } },
                     { upsert: true }
                   )
-                  const retrySave = await collection.findOne({ userEmail })
-                  const retryColumnConfig = retrySave?.columnConfig
-                  if (Array.isArray(retryColumnConfig) && JSON.stringify(retryColumnConfig) === JSON.stringify(columnConfig)) {
+                  const retrySave = await collection.findOne({ gmail: userEmail })
+                  const retryColumnConfigs = retrySave?.columnConfigs
+                  if (Array.isArray(retryColumnConfigs) && JSON.stringify(retryColumnConfigs) === JSON.stringify(columnConfig)) {
                     console.log(`[POST] ✓ Retry save successful`)
                   } else {
                     console.error(`[POST] ❌ Retry save also failed`)
                   }
                 }
               } else {
-                console.error(`[POST] ❌❌❌ Column config NOT SAVED - Expected array in DB, got:`, typeof savedColumnConfig, savedColumnConfig)
+                console.error(`[POST] ❌❌❌ Column config NOT SAVED - Expected array in DB, got:`, typeof savedColumnConfigs, savedColumnConfigs)
                 // Force save it
                 console.log(`[POST] Force saving column configuration...`)
                 await collection.updateOne(
-                  { userEmail },
-                  { $set: { columnConfig } },
+                  { gmail: userEmail },
+                  { $set: { columnConfigs: columnConfig } },
                   { upsert: true }
                 )
               }
@@ -450,7 +501,7 @@ export async function POST(request: NextRequest) {
               console.warn(`[POST] ⚠ Column config provided but not an array:`, typeof columnConfig)
             }
           } else {
-            console.log(`[POST] Column config not provided - preserved existing: ${Array.isArray(savedColumnConfig) ? savedColumnConfig.length : 'none'}`)
+            console.log(`[POST] Column config not provided - preserved existing: ${Array.isArray(savedColumnConfigs) ? savedColumnConfigs.length : 'none'}`)
           }
           
           // Alert if data count decreased unexpectedly (potential data loss)
@@ -459,26 +510,26 @@ export async function POST(request: NextRequest) {
           }
           
           // Return success - data is now safely stored in MongoDB
-          // Document structure verified: { userEmail, products, columnConfig, updatedAt }
+          // Document structure verified: { gmail, products, columnConfigs, updatedAt }
           // ALL THREE fields are guaranteed to be in MongoDB
           const responseData = {
             success: true,
             products,
             saved: true,
             storage: 'mongodb',
-            columnConfig: savedColumnConfig || columnConfig || null, // Return saved config
+            columnConfig: savedColumnConfigs || columnConfig || null, // Return saved config
             documentStructure: {
-              userEmail: savedUserEmail || userEmail,
+              gmail: savedGmail || userEmail,
               productsCount: afterCount,
-              columnConfigCount: Array.isArray(savedColumnConfig) ? savedColumnConfig.length : (savedColumnConfig ? 'invalid' : 0),
-              hasAllFields: !!(savedUserEmail && afterSave?.products && savedColumnConfig !== null)
+              columnConfigCount: Array.isArray(savedColumnConfigs) ? savedColumnConfigs.length : (savedColumnConfigs ? 'invalid' : 0),
+              hasAllFields: !!(savedGmail && afterSave?.products && savedColumnConfigs !== null)
             }
           }
           
           console.log(`[POST] ✓✓✓ Returning success response with complete document structure:`)
-          console.log(`[POST]   - userEmail: "${responseData.documentStructure.userEmail}"`)
+          console.log(`[POST]   - gmail: "${responseData.documentStructure.gmail}"`)
           console.log(`[POST]   - products: ${responseData.documentStructure.productsCount} items`)
-          console.log(`[POST]   - columnConfig: ${responseData.documentStructure.columnConfigCount} columns`)
+          console.log(`[POST]   - columnConfigs: ${responseData.documentStructure.columnConfigCount} columns`)
           console.log(`[POST]   - All fields present: ${responseData.documentStructure.hasAllFields ? 'YES ✓' : 'NO ❌'}`)
           
           return NextResponse.json(
