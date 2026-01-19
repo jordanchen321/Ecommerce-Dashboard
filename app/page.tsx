@@ -29,6 +29,7 @@ export default function Home() {
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [isLoaded, setIsLoaded] = useState(false)
+  const [loadNonce, setLoadNonce] = useState(0) // triggers refetch on failures
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const isInitialLoadRef = useRef(true)
   const lastSavedProductsRef = useRef<Product[]>([])
@@ -73,6 +74,7 @@ export default function Home() {
         setFilteredProducts([])
         setSearchTerm("")
         setIsLoaded(false)
+        setLoadNonce(0)
         isInitialLoadRef.current = true
         previousEmailRef.current = null
       }
@@ -122,6 +124,12 @@ export default function Home() {
     // Fetch products from API (with cache-busting and abort signal)
     const fetchProducts = async (retryCount = 0) => {
       const maxRetries = 2
+      const scheduleRetry = () => {
+        // allow retry even if isLoaded was set true previously
+        setIsLoaded(false)
+        // Trigger another run after a short delay (handles transient auth/network hiccups)
+        setTimeout(() => setLoadNonce((n) => n + 1), 1500)
+      }
       
       try {
         const response = await fetch('/api/products?' + new URLSearchParams({ 
@@ -166,6 +174,9 @@ export default function Home() {
             setProducts([])
             setFilteredProducts([])
             lastSavedProductsRef.current = []
+            // Treat invalid payload as retryable (server hiccup)
+            scheduleRetry()
+            return
           }
           
           // Load column configuration if available (same pattern as products)
@@ -191,8 +202,9 @@ export default function Home() {
           setProducts([])
           setFilteredProducts([])
           lastSavedProductsRef.current = []
-          setIsLoaded(true)
-          isInitialLoadRef.current = false
+          // Retry on non-OK responses (can happen briefly during auth/session propagation)
+          scheduleRetry()
+          return
         }
       } catch (error: any) {
         // Ignore abort errors
@@ -212,8 +224,8 @@ export default function Home() {
         setProducts([])
         setFilteredProducts([])
         lastSavedProductsRef.current = []
-        setIsLoaded(true)
-        isInitialLoadRef.current = false
+        scheduleRetry()
+        return
       } finally {
         isLoadingRef.current = false
         if (abortControllerRef.current === abortController) {
@@ -232,7 +244,7 @@ export default function Home() {
       }
       isLoadingRef.current = false
     }
-  }, [session?.user?.email, status]) // Removed isLoaded from dependencies to prevent loops
+  }, [session?.user?.email, status, loadNonce]) // loadNonce triggers retries on failure
 
   // Save products to API whenever products change (tied to user email)
   // CRITICAL: Only save after initial data is loaded and only if products actually changed

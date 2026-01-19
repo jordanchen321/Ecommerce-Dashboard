@@ -42,19 +42,34 @@ function renderCellValue(product: Product, column: ColumnConfig): React.ReactNod
         </div>
       )
 
-    case 'currency':
-      const numValue = typeof value === 'number' ? value : parseFloat(String(value)) || 0
+    case 'currency': {
+      if (value === '' || value === undefined || value === null) {
+        return <span className="text-gray-400">-</span>
+      }
+      const numValue = typeof value === 'number' ? value : parseFloat(String(value))
+      if (numValue === undefined || numValue === null || isNaN(numValue)) {
+        return <span className="text-gray-400">-</span>
+      }
       return <span className="text-sm text-gray-700">${numValue.toFixed(2)}</span>
+    }
 
-    case 'number':
-      const num = typeof value === 'number' ? value : parseFloat(String(value)) || 0
+    case 'number': {
+      if (value === '' || value === undefined || value === null) {
+        return <span className="text-gray-400">-</span>
+      }
+      const num = typeof value === 'number' ? value : parseFloat(String(value))
+      if (num === undefined || num === null || isNaN(num)) {
+        return <span className="text-gray-400">-</span>
+      }
       return <span className="text-sm text-gray-700">{num}</span>
+    }
 
     case 'date':
       if (value instanceof Date) {
         return <span className="text-sm text-gray-700">{value.toLocaleDateString()}</span>
       }
       if (typeof value === 'string') {
+        if (value.trim() === '') return <span className="text-gray-400">-</span>
         const date = new Date(value)
         if (!isNaN(date.getTime())) {
           return <span className="text-sm text-gray-700">{date.toLocaleDateString()}</span>
