@@ -32,6 +32,7 @@ export interface Product {
 // Note: This won't persist across serverless function restarts on Vercel
 // IMPORTANT: Data will be lost on redeploy if MongoDB is not configured
 const productsStore: Record<string, Product[]> = {}
+const columnConfigStore: Record<string, ColumnConfig[]> = {}
 
 // Helper function to check if MongoDB is configured
 function isMongoDBConfigured(): boolean {
@@ -166,7 +167,7 @@ export async function GET() {
     // Fallback to in-memory storage (WARNING: data lost on redeploy)
     // This should only be used if MongoDB is not configured
     const products = productsStore[userEmail] || []
-    const columnConfig = productsStore[`${userEmail}_columns`] || null
+    const columnConfig = columnConfigStore[userEmail] || null
     
     return NextResponse.json(
       { products, columnConfig },
@@ -519,10 +520,7 @@ export async function POST(request: NextRequest) {
     // Store it in memory too if provided
     if (columnConfig !== undefined && Array.isArray(columnConfig)) {
       // Store columnConfig in memory (temporary - will be lost on restart)
-      if (!productsStore[`${userEmail}_columns`]) {
-        productsStore[`${userEmail}_columns`] = {}
-      }
-      productsStore[`${userEmail}_columns`] = columnConfig
+      columnConfigStore[userEmail] = columnConfig
     }
     
     return NextResponse.json(
@@ -532,7 +530,7 @@ export async function POST(request: NextRequest) {
         saved: true, 
         storage: 'memory', 
         warning: 'Data will be lost on server restart - MongoDB not configured',
-        columnConfig: columnConfig || productsStore[`${userEmail}_columns`] || null
+        columnConfig: columnConfig || columnConfigStore[userEmail] || null
       },
       {
         headers: {
