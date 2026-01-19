@@ -69,8 +69,34 @@ function renderCellValue(product: Product, column: ColumnConfig): React.ReactNod
 export default function ProductTable({ products, onRemove, columns }: ProductTableProps) {
   const { t } = useLanguage()
   
-  // Filter to only visible columns, plus always show actions
-  const visibleColumns = columns.filter(col => col.visible)
+  // Filter to only visible columns, and sort so actions is always last
+  // Order: Core columns (in original order) -> Custom columns -> Actions
+  const coreColumnOrder = ['image', 'productId', 'name', 'price', 'quantity', 'totalValue']
+  const visibleColumns = columns
+    .filter(col => col.visible)
+    .sort((a, b) => {
+      // Actions column should always be last
+      if (a.field === 'actions') return 1
+      if (b.field === 'actions') return -1
+      
+      // Both are core columns - maintain original order
+      const aIndex = coreColumnOrder.indexOf(a.field)
+      const bIndex = coreColumnOrder.indexOf(b.field)
+      if (aIndex !== -1 && bIndex !== -1) {
+        return aIndex - bIndex
+      }
+      
+      // Custom columns should come after core columns but before actions
+      if (a.isCustom && !b.isCustom) return 1
+      if (!a.isCustom && b.isCustom) return -1
+      
+      // Both are custom - maintain original order (by id)
+      if (a.isCustom && b.isCustom) {
+        return a.id.localeCompare(b.id)
+      }
+      
+      return 0
+    })
 
   // Special handling for totalValue column (calculated field)
   const hasTotalValue = visibleColumns.some(col => col.field === 'totalValue')

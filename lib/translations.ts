@@ -36,6 +36,21 @@ interface Translations {
   'search.placeholder': string
   'search.noResults': string
   'empty.noProducts': string
+  'columns.manage': string
+  'columns.title': string
+  'columns.visible': string
+  'columns.hidden': string
+  'columns.custom': string
+  'columns.addCustom': string
+  'columns.fieldName': string
+  'columns.fieldNamePlaceholder': string
+  'columns.displayLabel': string
+  'columns.displayLabelPlaceholder': string
+  'columns.type': string
+  'columns.add': string
+  'columns.remove': string
+  'columns.error.fieldAndLabel': string
+  'columns.error.duplicate': string
 }
 
 export const translations: Record<Language, Translations> = {
@@ -75,6 +90,21 @@ export const translations: Record<Language, Translations> = {
     'search.placeholder': 'Search by Product ID...',
     'search.noResults': 'No products found matching "{term}"',
     'empty.noProducts': 'No products added yet. Add your first product!',
+    'columns.manage': 'Manage Columns',
+    'columns.title': 'Column Settings',
+    'columns.visible': 'Visible Columns',
+    'columns.hidden': 'Hidden Columns',
+    'columns.custom': '(custom)',
+    'columns.addCustom': 'Add Custom Column',
+    'columns.fieldName': 'Field Name',
+    'columns.fieldNamePlaceholder': "Field name (e.g., 'category', 'brand')",
+    'columns.displayLabel': 'Display Label',
+    'columns.displayLabelPlaceholder': "Display label (e.g., 'Category', 'Brand')",
+    'columns.type': 'Type',
+    'columns.add': 'Add Column',
+    'columns.remove': 'Remove column',
+    'columns.error.fieldAndLabel': 'Please enter both field name and label',
+    'columns.error.duplicate': 'A column with this field name already exists',
   },
   zh: {
     'app.title': '电商仪表板',
@@ -112,6 +142,21 @@ export const translations: Record<Language, Translations> = {
     'search.placeholder': '按产品ID搜索...',
     'search.noResults': '未找到匹配 "{term}" 的产品',
     'empty.noProducts': '尚未添加产品。添加您的第一个产品！',
+    'columns.manage': '管理列',
+    'columns.title': '列设置',
+    'columns.visible': '可见列',
+    'columns.hidden': '隐藏列',
+    'columns.custom': '（自定义）',
+    'columns.addCustom': '添加自定义列',
+    'columns.fieldName': '字段名称',
+    'columns.fieldNamePlaceholder': "字段名称（例如：'category'、'brand'）",
+    'columns.displayLabel': '显示标签',
+    'columns.displayLabelPlaceholder': "显示标签（例如：'类别'、'品牌'）",
+    'columns.type': '类型',
+    'columns.add': '添加列',
+    'columns.remove': '删除列',
+    'columns.error.fieldAndLabel': '请输入字段名称和显示标签',
+    'columns.error.duplicate': '已存在具有此字段名称的列',
   },
 }
 

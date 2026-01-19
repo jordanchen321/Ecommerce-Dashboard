@@ -363,7 +363,10 @@ export default function Home() {
               <h2 className="text-lg sm:text-xl font-semibold text-gray-800 mb-4">
                 {t('form.title')}
               </h2>
-              <ProductForm onAdd={handleAddProduct} />
+              <ProductForm 
+                onAdd={handleAddProduct} 
+                customColumns={columns.filter(col => col.isCustom)}
+              />
             </div>
           </div>
 

@@ -1,20 +1,36 @@
 "use client"
 
-import { useState, FormEvent } from "react"
+import { useState, FormEvent, useEffect } from "react"
 import type { Product } from "@/app/page"
 import { useLanguage } from "@/contexts/LanguageContext"
+import type { ColumnConfig } from "./ColumnManager"
 
 interface ProductFormProps {
   onAdd: (product: Omit<Product, "id">) => void
+  customColumns?: ColumnConfig[] // Custom columns that need input fields
 }
 
-export default function ProductForm({ onAdd }: ProductFormProps) {
+export default function ProductForm({ onAdd, customColumns = [] }: ProductFormProps) {
   const { t } = useLanguage()
   const [name, setName] = useState("")
   const [price, setPrice] = useState("")
   const [productId, setProductId] = useState("")
   const [quantity, setQuantity] = useState("")
   const [imagePreview, setImagePreview] = useState<string | null>(null)
+  
+  // Dynamic state for custom columns - only for custom columns (not core fields)
+  const [customFields, setCustomFields] = useState<Record<string, string>>({})
+  
+  // Initialize custom fields when customColumns change
+  useEffect(() => {
+    const initialFields: Record<string, string> = {}
+    customColumns.forEach(col => {
+      if (col.isCustom && !['name', 'price', 'productId', 'quantity', 'image'].includes(col.field)) {
+        initialFields[col.field] = ''
+      }
+    })
+    setCustomFields(initialFields)
+  }, [customColumns])
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
@@ -37,13 +53,17 @@ export default function ProductForm({ onAdd }: ProductFormProps) {
       return
     }
 
-    onAdd({
+    // Build product object with core fields and custom fields
+    const productData: Omit<Product, "id"> = {
       name,
       price: priceNum,
       productId,
       quantity: quantityNum,
       image: imagePreview || undefined,
-    })
+      ...customFields, // Add custom fields
+    }
+    
+    onAdd(productData)
 
     // Reset form
     setName("")
@@ -51,6 +71,14 @@ export default function ProductForm({ onAdd }: ProductFormProps) {
     setProductId("")
     setQuantity("")
     setImagePreview(null)
+    // Reset custom fields
+    const resetFields: Record<string, string> = {}
+    customColumns.forEach(col => {
+      if (col.isCustom && !['name', 'price', 'productId', 'quantity', 'image'].includes(col.field)) {
+        resetFields[col.field] = ''
+      }
+    })
+    setCustomFields(resetFields)
   }
 
   return (
@@ -150,6 +178,59 @@ export default function ProductForm({ onAdd }: ProductFormProps) {
           </div>
         )}
       </div>
+
+      {/* Dynamic custom column inputs */}
+      {customColumns
+        .filter(col => col.isCustom && !['name', 'price', 'productId', 'quantity', 'image'].includes(col.field))
+        .map((column) => {
+          const fieldValue = customFields[column.field] || ''
+          
+          return (
+            <div key={column.id}>
+              <label htmlFor={`custom-${column.field}`} className="block text-sm font-medium text-gray-700 mb-1">
+                {column.label} ({t('form.optional')})
+              </label>
+              {column.type === 'number' || column.type === 'currency' ? (
+                <input
+                  type="number"
+                  id={`custom-${column.field}`}
+                  value={fieldValue}
+                  onChange={(e) => setCustomFields({ ...customFields, [column.field]: e.target.value })}
+                  step={column.type === 'currency' ? '0.01' : '1'}
+                  min="0"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder={column.type === 'currency' ? '0.00' : '0'}
+                />
+              ) : column.type === 'date' ? (
+                <input
+                  type="date"
+                  id={`custom-${column.field}`}
+                  value={fieldValue}
+                  onChange={(e) => setCustomFields({ ...customFields, [column.field]: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              ) : column.type === 'image' ? (
+                <input
+                  type="text"
+                  id={`custom-${column.field}`}
+                  value={fieldValue}
+                  onChange={(e) => setCustomFields({ ...customFields, [column.field]: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder={t('form.imageUrlPlaceholder')}
+                />
+              ) : (
+                <input
+                  type="text"
+                  id={`custom-${column.field}`}
+                  value={fieldValue}
+                  onChange={(e) => setCustomFields({ ...customFields, [column.field]: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder={`Enter ${column.label.toLowerCase()}`}
+                />
+              )}
+            </div>
+          )
+        })}
 
       <button
         type="submit"
