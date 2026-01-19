@@ -103,40 +103,44 @@ npm run dev
 
 **Important:** The website will only work fully after you set all environment variables in Vercel and update the Google OAuth redirect URLs.
 
-### Optional: Set Up MongoDB for Cross-Device Data Sync
+### Set Up Firebase Firestore for Cross-Device Data Sync
 
 To enable data synchronization across devices (so products sync between phone, laptop, etc.):
 
-1. **Create a MongoDB Atlas account:**
-   - Go to [MongoDB Atlas](https://www.mongodb.com/cloud/atlas/register)
-   - Create a free cluster (M0 tier)
+**📖 See [FIREBASE_SETUP.md](./FIREBASE_SETUP.md) for detailed setup instructions.**
 
-2. **Get your connection string:**
-   - Click "Connect" on your cluster
-   - Choose "Connect your application"
-   - Copy the connection string (format: `mongodb+srv://username:password@cluster.mongodb.net/`)
-   - Replace `<password>` with your database password
-   - Optionally add `ecommerce-dashboard` at the end: `...mongodb.net/ecommerce-dashboard`
+Quick setup:
 
-3. **Add to environment variables:**
-   - **Vercel**: Settings → Environment Variables → Add `MONGODB_URI` with your connection string
-   - **Local dev**: Add `MONGODB_URI=your-connection-string` to `.env.local`
+1. **Create a Firebase project:**
+   - Go to [Firebase Console](https://console.firebase.google.com/)
+   - Create a new project
+   - Enable Firestore Database
 
-4. **Redeploy** after adding `MONGODB_URI`
+2. **Create a service account:**
+   - Go to Project Settings → Service accounts
+   - Generate new private key (downloads JSON file)
+
+3. **Add environment variables to Vercel:**
+   - `FIREBASE_PROJECT_ID` - Your Firebase project ID
+   - `FIREBASE_PRIVATE_KEY` - Private key from JSON (with `\n` characters)
+   - `FIREBASE_CLIENT_EMAIL` - Client email from JSON
+   - Select all environments (Production, Preview, Development)
+
+4. **Redeploy** after adding variables
 
 **⚠️ CRITICAL: Data Persistence Across Deployments**
 
-Your user data is **100% safe** when you update the website code, as long as MongoDB is configured:
+Your user data is **100% safe** when you update the website code, as long as Firebase is configured:
 
-✅ **With MongoDB Configured:**
+✅ **With Firebase Configured:**
 - **All user data persists permanently** across code updates, deployments, and server restarts
-- Data is stored in MongoDB Atlas cloud database (separate from your code)
-- Each user's data is tied to their Google account email (`userEmail` as unique key)
+- Data is stored in Firebase Firestore cloud database (separate from your code)
+- Each user's data is tied to their Google account email (`gmail` as unique key)
 - Data survives all website updates - code changes never affect existing data
 - Data syncs across all devices (phone, laptop, tablet, etc.)
-- Uses MongoDB `upsert` operations - never overwrites unless explicitly updating
+- Uses Firestore `set` with merge - never overwrites unless explicitly updating
 
-❌ **Without MongoDB:**
+❌ **Without Firebase:**
 - Data is stored in-memory only and will be **LOST** on:
   - Code deployments
   - Server restarts
@@ -145,16 +149,16 @@ Your user data is **100% safe** when you update the website code, as long as Mon
 
 **🔒 How Data Persistence Works:**
 
-1. **Data Storage**: All product data is stored in MongoDB with `userEmail` as the unique key
-2. **Load on Login**: When a user signs in, the app fetches their data from MongoDB (always the latest saved version)
-3. **Save on Changes**: When products are added/removed, data is saved to MongoDB (debounced to avoid excessive writes)
-4. **Deployment Safety**: Code deployments only affect your website code - MongoDB database remains completely separate and unchanged
+1. **Data Storage**: All product data is stored in Firestore `users` collection with `gmail` as the unique key
+2. **Load on Login**: When a user signs in, the app fetches their data from Firestore (always the latest saved version)
+3. **Save on Changes**: When products are added/removed, data is saved to Firestore (debounced to avoid excessive writes)
+4. **Deployment Safety**: Code deployments only affect your website code - Firestore database remains completely separate and unchanged
 
 **📋 To Guarantee Data Persistence:**
 
-1. Set up MongoDB Atlas (free tier available)
-2. Add `MONGODB_URI` to your Vercel environment variables
-3. Redeploy once to activate MongoDB
+1. Set up Firebase Firestore (free tier available)
+2. Add Firebase environment variables to Vercel (see FIREBASE_SETUP.md)
+3. Redeploy once to activate Firebase
 4. ✅ All existing and future user data will now survive all code updates
 
 **Note:** Without MongoDB, data won't sync across devices. With MongoDB, your products will be available on all devices when you sign in with the same Google account.

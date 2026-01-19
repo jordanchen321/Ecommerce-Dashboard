@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth/next"
 import { authOptions } from "@/app/api/auth/[...nextauth]/route"
-import clientPromise from "@/lib/mongodb"
+import getFirestoreInstance, { isFirebaseConfigured } from "@/lib/firebase"
 
 // Disable caching
 export const dynamic = 'force-dynamic'
@@ -16,43 +16,43 @@ export async function GET() {
     }
 
     const userEmail = session.user.email
-    const mongoUriConfigured = !!process.env.MONGODB_URI
+    const firebaseConfigured = isFirebaseConfigured()
     
-    let mongoConnected = false
-    let mongoError: string | null = null
+    let firestoreConnected = false
+    let firestoreError: string | null = null
     let productCount = 0
     let lastUpdated: Date | null = null
 
-    if (mongoUriConfigured && clientPromise) {
+    if (firebaseConfigured) {
       try {
-        const client = await clientPromise
-        if (client) {
-          // Test connection
-          await client.db("admin").admin().ping()
-          mongoConnected = true
+        const db = getFirestoreInstance()
+        if (db) {
+          // Test connection by trying to read a document
+          const docId = userEmail.replace(/[^a-zA-Z0-9]/g, '_')
+          const userDocRef = db.collection('users').doc(docId)
+          const userDoc = await userDocRef.get()
+          
+          firestoreConnected = true
 
           // Get user's product count
-          const db = client.db("ecommerce_dashboard")
-          const collection = db.collection("products")
-          const userProduct = await collection.findOne({ userEmail })
-          
-          if (userProduct) {
-            productCount = Array.isArray(userProduct.products) ? userProduct.products.length : 0
-            lastUpdated = userProduct.updatedAt || null
+          if (userDoc.exists) {
+            const userData = userDoc.data()
+            productCount = Array.isArray(userData?.products) ? userData.products.length : 0
+            lastUpdated = userData?.updatedAt?.toDate() || null
           }
         }
       } catch (error: any) {
-        mongoError = error.message || String(error)
-        console.error("[Status] MongoDB connection error:", error)
+        firestoreError = error.message || String(error)
+        console.error("[Status] Firestore connection error:", error)
       }
     }
 
     return NextResponse.json({
       userEmail,
-      mongodb: {
-        configured: mongoUriConfigured,
-        connected: mongoConnected,
-        error: mongoError,
+      firestore: {
+        configured: firebaseConfigured,
+        connected: firestoreConnected,
+        error: firestoreError,
       },
       products: {
         count: productCount,
