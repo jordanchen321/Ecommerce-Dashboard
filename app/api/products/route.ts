@@ -292,8 +292,29 @@ export async function POST(request: NextRequest) {
         if (client) {
           console.log(`[POST] ✓ MongoDB client obtained successfully`)
           
+          // Verify connection is alive
+          try {
+            await client.db("admin").command({ ping: 1 })
+            console.log(`[POST] ✓ MongoDB connection verified with ping`)
+          } catch (pingError: any) {
+            console.error(`[POST] ⚠ Ping failed:`, pingError.message)
+            // Continue anyway - ping failure doesn't mean we can't write
+          }
+          
           const db = client.db("ecommerce_dashboard")
+          console.log(`[POST] Using database: "ecommerce_dashboard"`)
+          
           const collection = db.collection("products")
+          console.log(`[POST] Using collection: "products"`)
+          
+          // Verify we can access the collection
+          try {
+            const collectionStats = await collection.countDocuments()
+            console.log(`[POST] ✓ Collection accessible - current document count: ${collectionStats}`)
+          } catch (statsError: any) {
+            console.error(`[POST] ⚠ Could not get collection stats:`, statsError.message)
+            // Continue anyway - might be a new collection
+          }
           
           // Allow empty arrays - users may legitimately delete all products
           // The frontend already has protection against accidental empty saves during initial load
@@ -388,6 +409,10 @@ export async function POST(request: NextRequest) {
           
           // Save with upsert - use gmail as the key
           // Also remove old fields if they exist (migration cleanup)
+          console.log(`[POST] Executing upsert operation...`)
+          console.log(`[POST] Query filter: { gmail: "${userEmail}" }`)
+          console.log(`[POST] Update data keys:`, Object.keys(updateData))
+          
           const result = await collection.updateOne(
             { gmail: userEmail },
             { 
@@ -397,7 +422,20 @@ export async function POST(request: NextRequest) {
             { upsert: true }
           )
           
-          console.log(`[POST] MongoDB update result for ${userEmail}: modified=${result.modifiedCount}, inserted=${result.upsertedCount}`)
+          console.log(`[POST] MongoDB update result for ${userEmail}:`)
+          console.log(`[POST]   - matchedCount: ${result.matchedCount}`)
+          console.log(`[POST]   - modifiedCount: ${result.modifiedCount}`)
+          console.log(`[POST]   - upsertedCount: ${result.upsertedCount}`)
+          console.log(`[POST]   - upsertedId: ${result.upsertedId || 'none'}`)
+          
+          if (result.upsertedCount > 0) {
+            console.log(`[POST] ✓✓✓ NEW document created in MongoDB with ID: ${result.upsertedId}`)
+          } else if (result.modifiedCount > 0) {
+            console.log(`[POST] ✓✓✓ EXISTING document updated in MongoDB`)
+          } else {
+            console.warn(`[POST] ⚠⚠⚠ WARNING: No document was created or modified!`)
+            console.warn(`[POST] This might indicate a problem with the save operation`)
+          }
           
           // DOUBLE-CHECK: If columnConfig was provided, verify it was saved
           // If not saved in main update, force save it separately
@@ -427,13 +465,41 @@ export async function POST(request: NextRequest) {
           
           // Verify data was saved correctly - ensure ALL THREE fields are in MongoDB
           // Document structure: { gmail, products, columnConfigs, updatedAt }
+          console.log(`[POST] Verifying saved data in database...`)
           const afterSave = await collection.findOne({ gmail: userEmail })
+          
+          if (!afterSave) {
+            console.error(`[POST] ❌❌❌ CRITICAL ERROR: Document NOT FOUND after save!`)
+            console.error(`[POST] Query used: { gmail: "${userEmail}" }`)
+            console.error(`[POST] This means the save operation may have failed silently`)
+            
+            // Try to find by any means possible
+            const altFind = await collection.findOne({ userEmail })
+            if (altFind) {
+              console.error(`[POST] ⚠ Found document with old structure (userEmail), but not with new structure (gmail)`)
+            }
+            
+            // List all documents to see what's actually in the database
+            const allDocs = await collection.find({}).limit(5).toArray()
+            console.error(`[POST] Sample documents in collection:`, allDocs.map(d => ({ 
+              gmail: d.gmail, 
+              userEmail: d.userEmail, 
+              productCount: d.products?.length || 0 
+            })))
+          } else {
+            console.log(`[POST] ✓ Document found in database after save`)
+          }
+          
           const afterCount = afterSave?.products?.length || 0
           const savedColumnConfigs = afterSave?.columnConfigs || null
           const savedGmail = afterSave?.gmail || null
           
           console.log(`[POST] MongoDB save for ${userEmail}: ${result.modifiedCount} modified, ${result.upsertedCount} inserted`)
           console.log(`[POST] Products: ${products.length} saved, verified: ${afterCount} in DB`)
+          
+          // Additional verification: Check total document count
+          const totalDocs = await collection.countDocuments({})
+          console.log(`[POST] Total documents in "products" collection: ${totalDocs}`)
           
           // Verify complete document structure - all three fields should be present
           console.log(`[POST] 📋 MongoDB Document Structure Verification:`)

@@ -72,8 +72,19 @@ async function testConnection() {
     
     if (productCount > 0) {
       const sample = await productsCollection.findOne({})
-      console.log(`  Sample document userEmail: ${sample?.userEmail || 'N/A'}`)
-      console.log(`  Sample products count: ${sample?.products?.length || 0}`)
+      console.log(`\n  Sample document structure:`)
+      console.log(`    - gmail: ${sample?.gmail || sample?.userEmail || 'N/A'}`)
+      console.log(`    - userEmail (old): ${sample?.userEmail || 'N/A (migrated to gmail)'}`)
+      console.log(`    - products count: ${sample?.products?.length || 0}`)
+      console.log(`    - columnConfigs count: ${sample?.columnConfigs?.length || sample?.columnConfig?.length || 0}`)
+      console.log(`    - updatedAt: ${sample?.updatedAt || 'N/A'}`)
+      
+      // Check for migration needed
+      if (sample?.userEmail && !sample?.gmail) {
+        console.log(`\n  ⚠ Document uses old structure (userEmail) - will be migrated on next save`)
+      }
+    } else {
+      console.log(`  No documents found - database is ready for new data`)
     }
     
     await client.close()
