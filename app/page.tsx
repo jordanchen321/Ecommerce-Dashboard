@@ -178,8 +178,13 @@ export default function Home() {
 
   const handleAddProduct = (product: Omit<Product, "id">) => {
     const newProduct: Product = {
-      ...product,
       id: Date.now().toString(),
+      name: product.name || '',
+      price: product.price || 0,
+      productId: product.productId || '',
+      quantity: product.quantity || 0,
+      image: product.image,
+      ...product,
     }
     setProducts([...products, newProduct])
   }
