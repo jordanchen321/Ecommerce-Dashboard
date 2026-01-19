@@ -142,8 +142,23 @@ export default function ProductTable({ products, onRemove, onEdit, columns }: Pr
                 
                 // Handle formula columns
                 if (column.type === 'formula' && column.formula) {
+                  // Only include numeric columns in formulas
+                  const isNumericColumn = (col: ColumnConfig): boolean => {
+                    // Core numeric fields
+                    if (col.field === 'price' || col.field === 'quantity') {
+                      return true
+                    }
+                    // Numeric column types
+                    return col.type === 'number' || col.type === 'currency'
+                  }
+                  
                   const availableColumns = columns
-                    .filter(col => col.type !== 'formula' && col.field !== 'actions' && col.field !== 'totalValue')
+                    .filter(col => 
+                      col.type !== 'formula' && 
+                      col.field !== 'actions' && 
+                      col.field !== 'totalValue' &&
+                      isNumericColumn(col)
+                    )
                     .map(col => col.field)
                   
                   const result = evaluateFormula(column.formula, product, availableColumns)

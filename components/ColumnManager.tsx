@@ -27,9 +27,24 @@ export default function ColumnManager({ columns, onColumnsChange, availableField
   const [newColumnFormula, setNewColumnFormula] = useState("")
   const dropdownRef = useRef<HTMLDivElement>(null)
   
-  // Get available column names for formula suggestions
+  // Get available column names for formula suggestions (only numeric columns)
+  // Numeric columns: 'number', 'currency' types, and core numeric fields (price, quantity)
+  const isNumericColumn = (col: ColumnConfig): boolean => {
+    // Core numeric fields
+    if (col.field === 'price' || col.field === 'quantity') {
+      return true
+    }
+    // Numeric column types
+    return col.type === 'number' || col.type === 'currency'
+  }
+  
   const availableColumnNames = columns
-    .filter(col => col.type !== 'formula' && col.field !== 'actions' && col.field !== 'totalValue')
+    .filter(col => 
+      col.type !== 'formula' && 
+      col.field !== 'actions' && 
+      col.field !== 'totalValue' &&
+      isNumericColumn(col)
+    )
     .map(col => col.field)
   
   // Close dropdown when clicking outside
@@ -75,6 +90,31 @@ export default function ColumnManager({ columns, onColumnsChange, availableField
       if (!newColumnFormula.trim()) {
         alert(t('columns.error.formulaRequired') || 'Please enter a formula')
         return
+      }
+      
+      // Validate that formula only uses numeric columns
+      const formulaText = newColumnFormula.trim().toLowerCase()
+      const allColumnFields = columns
+        .filter(col => col.field !== 'actions' && col.field !== 'totalValue')
+        .map(col => col.field.toLowerCase())
+      
+      // Check for non-numeric columns in formula
+      const nonNumericColumns = columns
+        .filter(col => 
+          col.field !== 'actions' && 
+          col.field !== 'totalValue' &&
+          !isNumericColumn(col)
+        )
+        .map(col => col.field.toLowerCase())
+      
+      for (const nonNumericCol of nonNumericColumns) {
+        // Use word boundary to match whole column names only
+        const regex = new RegExp(`\\b${nonNumericCol.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i')
+        if (regex.test(formulaText)) {
+          const errorMsg = (t('columns.error.nonNumericColumn') || 'Formula can only use numeric columns. "{column}" is not a numeric column.').replace('{column}', nonNumericCol)
+          alert(errorMsg)
+          return
+        }
       }
     }
 
@@ -256,7 +296,12 @@ export default function ColumnManager({ columns, onColumnsChange, availableField
                         </button>
                       ))}
                     </div>
-                    <p className="mt-2">{t('columns.formulaHelp') || 'Use: +, -, *, /, (, ). Example: price * quantity'}</p>
+                    <p className="mt-2">{t('columns.formulaHelp') || 'Use: +, -, *, /, (, ). Only numeric columns can be used. Example: price * quantity'}</p>
+                    {availableColumnNames.length === 0 && (
+                      <p className="mt-1 text-amber-600 text-xs font-medium">
+                        {t('columns.noNumericColumns') || 'No numeric columns available. Add number or currency columns first.'}
+                      </p>
+                    )}
                   </div>
                 </div>
               )}

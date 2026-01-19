@@ -55,9 +55,11 @@ interface Translations {
   'columns.formulaPlaceholder': string
   'columns.availableColumns': string
   'columns.formulaHelp': string
+  'columns.noNumericColumns': string
   'columns.error.labelRequired': string
   'columns.error.duplicate': string
   'columns.error.formulaRequired': string
+  'columns.error.nonNumericColumn': string
 }
 
 export const translations: Record<Language, Translations> = {
@@ -115,10 +117,12 @@ export const translations: Record<Language, Translations> = {
     'columns.formula': 'Formula (Calculated)',
     'columns.formulaPlaceholder': 'e.g., price * quantity, (price - discount) * quantity',
     'columns.availableColumns': 'Available columns:',
-    'columns.formulaHelp': 'Use: +, -, *, /, (, ). Example: price * quantity',
+    'columns.formulaHelp': 'Use: +, -, *, /, (, ). Only numeric columns can be used. Example: price * quantity',
+    'columns.noNumericColumns': 'No numeric columns available. Add number or currency columns first.',
     'columns.error.labelRequired': 'Please enter a column name',
     'columns.error.duplicate': 'A column with this name already exists',
     'columns.error.formulaRequired': 'Please enter a formula expression',
+    'columns.error.nonNumericColumn': 'Formula can only use numeric columns. "{column}" is not a numeric column.',
   },
   zh: {
     'app.title': '电商仪表板',
@@ -174,10 +178,12 @@ export const translations: Record<Language, Translations> = {
     'columns.formula': '公式（计算）',
     'columns.formulaPlaceholder': '例如：price * quantity, (price - discount) * quantity',
     'columns.availableColumns': '可用列：',
-    'columns.formulaHelp': '使用：+, -, *, /, (, )。示例：price * quantity',
+    'columns.formulaHelp': '使用：+, -, *, /, (, )。只能使用数字列。示例：price * quantity',
+    'columns.noNumericColumns': '没有可用的数字列。请先添加数字或货币列。',
     'columns.error.labelRequired': '请输入列名称',
     'columns.error.duplicate': '已存在具有此名称的列',
     'columns.error.formulaRequired': '请输入公式表达式',
+    'columns.error.nonNumericColumn': '公式只能使用数字列。"{column}" 不是数字列。',
   },
 }
 

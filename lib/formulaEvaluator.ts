@@ -23,7 +23,8 @@ export function evaluateFormula(
     // Replace column names with their values
     let expression = formula.trim()
     
-    // Get all column names from available columns
+    // Get all column names from available columns (should already be filtered to numeric only)
+    // But we'll double-check here for safety
     const columnNames = availableColumns.filter(col => 
       col !== 'actions' && col !== 'totalValue'
     )

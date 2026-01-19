@@ -23,11 +23,14 @@ export default function ProductForm({ onAdd, customColumns = [] }: ProductFormPr
   const [customImagePreviews, setCustomImagePreviews] = useState<Record<string, string>>({})
   
   // Initialize custom fields when customColumns change
+  // Skip formula columns - they are calculated automatically
   useEffect(() => {
     const initialFields: Record<string, string> = {}
     const initialPreviews: Record<string, string> = {}
     customColumns.forEach(col => {
-      if (col.isCustom && !['name', 'price', 'productId', 'quantity', 'image'].includes(col.field)) {
+      if (col.isCustom && 
+          !['name', 'price', 'productId', 'quantity', 'image'].includes(col.field) &&
+          col.type !== 'formula') { // Skip formula columns
         initialFields[col.field] = ''
         if (col.type === 'image') {
           initialPreviews[col.field] = ''
@@ -85,11 +88,13 @@ export default function ProductForm({ onAdd, customColumns = [] }: ProductFormPr
     setProductId("")
     setQuantity("")
     setImagePreview(null)
-    // Reset custom fields
+    // Reset custom fields (skip formula columns)
     const resetFields: Record<string, string> = {}
     const resetPreviews: Record<string, string> = {}
     customColumns.forEach(col => {
-      if (col.isCustom && !['name', 'price', 'productId', 'quantity', 'image'].includes(col.field)) {
+      if (col.isCustom && 
+          !['name', 'price', 'productId', 'quantity', 'image'].includes(col.field) &&
+          col.type !== 'formula') { // Skip formula columns
         resetFields[col.field] = ''
         if (col.type === 'image') {
           resetPreviews[col.field] = ''
@@ -199,8 +204,13 @@ export default function ProductForm({ onAdd, customColumns = [] }: ProductFormPr
       </div>
 
       {/* Dynamic custom column inputs */}
+      {/* Skip formula columns - they are calculated automatically */}
       {customColumns
-        .filter(col => col.isCustom && !['name', 'price', 'productId', 'quantity', 'image'].includes(col.field))
+        .filter(col => 
+          col.isCustom && 
+          !['name', 'price', 'productId', 'quantity', 'image'].includes(col.field) &&
+          col.type !== 'formula' // Don't show input fields for formula columns
+        )
         .map((column) => {
           const fieldValue = customFields[column.field] || ''
           

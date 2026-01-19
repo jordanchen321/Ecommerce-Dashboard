@@ -51,11 +51,14 @@ export default function EditProductModal({ product, onSave, onCancel, customColu
       setImagePreview(product.image || null)
       
       // Initialize custom fields from product
+      // Skip formula columns - they are calculated automatically
       const initialFields: Record<string, string> = {}
       const initialPreviews: Record<string, string> = {}
       
       customColumns.forEach(col => {
-        if (col.isCustom && !['name', 'price', 'productId', 'quantity', 'image'].includes(col.field)) {
+        if (col.isCustom && 
+            !['name', 'price', 'productId', 'quantity', 'image'].includes(col.field) &&
+            col.type !== 'formula') { // Skip formula columns
           const value = product[col.field]
           if (value !== undefined && value !== null) {
             if (col.type === 'image') {
@@ -244,8 +247,13 @@ export default function EditProductModal({ product, onSave, onCancel, customColu
           </div>
 
           {/* Dynamic custom column inputs */}
+          {/* Skip formula columns - they are calculated automatically */}
           {customColumns
-            .filter(col => col.isCustom && !['name', 'price', 'productId', 'quantity', 'image'].includes(col.field))
+            .filter(col => 
+              col.isCustom && 
+              !['name', 'price', 'productId', 'quantity', 'image'].includes(col.field) &&
+              col.type !== 'formula' // Don't show input fields for formula columns
+            )
             .map((column) => {
               const fieldValue = customFields[column.field] || ''
               
