@@ -3,6 +3,7 @@
 import type { Product } from "@/app/page"
 import { useLanguage } from "@/contexts/LanguageContext"
 import type { ColumnConfig } from "./ColumnManager"
+import { evaluateFormula } from "@/lib/formulaEvaluator"
 
 interface ProductTableProps {
   products: Product[]
@@ -128,13 +129,49 @@ export default function ProductTable({ products, onRemove, onEdit, columns }: Pr
           {products.map((product) => (
             <tr key={product.id} className="hover:bg-gray-50">
               {visibleColumns.map((column) => {
-                // Special handling for calculated fields
+                // Special handling for calculated fields (totalValue and formula columns)
                 if (column.field === 'totalValue') {
                   const price = typeof product.price === 'number' ? product.price : 0
                   const quantity = typeof product.quantity === 'number' ? product.quantity : 0
                   return (
                     <td key={column.id} className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                       ${(price * quantity).toFixed(2)}
+                    </td>
+                  )
+                }
+                
+                // Handle formula columns
+                if (column.type === 'formula' && column.formula) {
+                  const availableColumns = columns
+                    .filter(col => col.type !== 'formula' && col.field !== 'actions' && col.field !== 'totalValue')
+                    .map(col => col.field)
+                  
+                  const result = evaluateFormula(column.formula, product, availableColumns)
+                  
+                  if (result === null) {
+                    return (
+                      <td key={column.id} className="px-6 py-4 whitespace-nowrap text-sm text-red-500">
+                        <span title="Formula evaluation error">Error</span>
+                      </td>
+                    )
+                  }
+                  
+                  // Format as number (formula columns are always numeric)
+                  // Check if result should be formatted as currency based on column label or default to number
+                  const isCurrency = column.label.toLowerCase().includes('price') || 
+                                    column.label.toLowerCase().includes('cost') ||
+                                    column.label.toLowerCase().includes('total') ||
+                                    column.label.toLowerCase().includes('amount')
+                  
+                  const formattedValue = isCurrency
+                    ? `$${result.toFixed(2)}`
+                    : Number.isInteger(result) 
+                      ? result.toString()
+                      : result.toFixed(2)
+                  
+                  return (
+                    <td key={column.id} className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      {formattedValue}
                     </td>
                   )
                 }

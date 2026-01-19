@@ -10,7 +10,8 @@ interface ColumnConfig {
   label: string
   visible: boolean
   isCustom: boolean
-  type?: 'text' | 'number' | 'currency' | 'date' | 'image'
+  type?: 'text' | 'number' | 'currency' | 'date' | 'image' | 'formula'
+  formula?: string // Formula expression for calculated columns
 }
 
 // Disable caching for this route

@@ -9,7 +9,8 @@ export interface ColumnConfig {
   label: string
   visible: boolean
   isCustom: boolean
-  type?: 'text' | 'number' | 'currency' | 'date' | 'image'
+  type?: 'text' | 'number' | 'currency' | 'date' | 'image' | 'formula'
+  formula?: string // Formula expression for calculated columns (e.g., "price * quantity")
 }
 
 interface ColumnManagerProps {
@@ -22,8 +23,14 @@ export default function ColumnManager({ columns, onColumnsChange, availableField
   const { t } = useLanguage()
   const [isOpen, setIsOpen] = useState(false)
   const [newColumnLabel, setNewColumnLabel] = useState("")
-  const [newColumnType, setNewColumnType] = useState<'text' | 'number' | 'currency' | 'date' | 'image'>('text')
+  const [newColumnType, setNewColumnType] = useState<'text' | 'number' | 'currency' | 'date' | 'image' | 'formula'>('text')
+  const [newColumnFormula, setNewColumnFormula] = useState("")
   const dropdownRef = useRef<HTMLDivElement>(null)
+  
+  // Get available column names for formula suggestions
+  const availableColumnNames = columns
+    .filter(col => col.type !== 'formula' && col.field !== 'actions' && col.field !== 'totalValue')
+    .map(col => col.field)
   
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -63,6 +70,14 @@ export default function ColumnManager({ columns, onColumnsChange, availableField
       return
     }
 
+    // For formula columns, validate formula
+    if (newColumnType === 'formula') {
+      if (!newColumnFormula.trim()) {
+        alert(t('columns.error.formulaRequired') || 'Please enter a formula')
+        return
+      }
+    }
+
     // Generate field name from label: lowercase, replace spaces with underscores, remove special chars
     const fieldName = newColumnLabel.trim()
       .toLowerCase()
@@ -82,11 +97,13 @@ export default function ColumnManager({ columns, onColumnsChange, availableField
       visible: true,
       isCustom: true,
       type: newColumnType,
+      ...(newColumnType === 'formula' && { formula: newColumnFormula.trim() }),
     }
 
     onColumnsChange([...columns, newColumn])
     setNewColumnLabel("")
     setNewColumnType('text')
+    setNewColumnFormula("")
   }
 
   const visibleColumns = columns.filter(col => col.visible)
@@ -201,7 +218,12 @@ export default function ColumnManager({ columns, onColumnsChange, availableField
               />
               <select
                 value={newColumnType}
-                onChange={(e) => setNewColumnType(e.target.value as any)}
+                onChange={(e) => {
+                  setNewColumnType(e.target.value as any)
+                  if (e.target.value !== 'formula') {
+                    setNewColumnFormula("")
+                  }
+                }}
                 className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="text">Text</option>
@@ -209,7 +231,35 @@ export default function ColumnManager({ columns, onColumnsChange, availableField
                 <option value="currency">Currency</option>
                 <option value="date">Date</option>
                 <option value="image">Image</option>
+                <option value="formula">{t('columns.formula') || 'Formula (Calculated)'}</option>
               </select>
+              {newColumnType === 'formula' && (
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    value={newColumnFormula}
+                    onChange={(e) => setNewColumnFormula(e.target.value)}
+                    placeholder={t('columns.formulaPlaceholder') || 'e.g., price * quantity, (price - discount) * quantity'}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                  />
+                  <div className="text-xs text-gray-500">
+                    <p className="mb-1">{t('columns.availableColumns') || 'Available columns:'}</p>
+                    <div className="flex flex-wrap gap-1">
+                      {availableColumnNames.map(name => (
+                        <button
+                          key={name}
+                          type="button"
+                          onClick={() => setNewColumnFormula(prev => prev + name)}
+                          className="px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs hover:bg-blue-100"
+                        >
+                          {name}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="mt-2">{t('columns.formulaHelp') || 'Use: +, -, *, /, (, ). Example: price * quantity'}</p>
+                  </div>
+                </div>
+              )}
               <button
                 onClick={addColumn}
                 className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition duration-200"

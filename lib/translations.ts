@@ -51,8 +51,13 @@ interface Translations {
   'columns.type': string
   'columns.add': string
   'columns.remove': string
+  'columns.formula': string
+  'columns.formulaPlaceholder': string
+  'columns.availableColumns': string
+  'columns.formulaHelp': string
   'columns.error.labelRequired': string
   'columns.error.duplicate': string
+  'columns.error.formulaRequired': string
 }
 
 export const translations: Record<Language, Translations> = {
@@ -107,8 +112,13 @@ export const translations: Record<Language, Translations> = {
     'columns.type': 'Type',
     'columns.add': 'Add Column',
     'columns.remove': 'Remove column',
+    'columns.formula': 'Formula (Calculated)',
+    'columns.formulaPlaceholder': 'e.g., price * quantity, (price - discount) * quantity',
+    'columns.availableColumns': 'Available columns:',
+    'columns.formulaHelp': 'Use: +, -, *, /, (, ). Example: price * quantity',
     'columns.error.labelRequired': 'Please enter a column name',
     'columns.error.duplicate': 'A column with this name already exists',
+    'columns.error.formulaRequired': 'Please enter a formula expression',
   },
   zh: {
     'app.title': '电商仪表板',
@@ -161,8 +171,13 @@ export const translations: Record<Language, Translations> = {
     'columns.type': '类型',
     'columns.add': '添加列',
     'columns.remove': '删除列',
+    'columns.formula': '公式（计算）',
+    'columns.formulaPlaceholder': '例如：price * quantity, (price - discount) * quantity',
+    'columns.availableColumns': '可用列：',
+    'columns.formulaHelp': '使用：+, -, *, /, (, )。示例：price * quantity',
     'columns.error.labelRequired': '请输入列名称',
     'columns.error.duplicate': '已存在具有此名称的列',
+    'columns.error.formulaRequired': '请输入公式表达式',
   },
 }
 
