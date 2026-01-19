@@ -93,7 +93,12 @@ export async function GET() {
           }
           
           // Also fetch column configuration if it exists
+          // Column config is stored per user and persists across all devices
           const columnConfig = userProduct?.columnConfig || null
+          
+          if (columnConfig) {
+            console.log(`[GET] Loaded column configuration for ${userEmail}: ${Array.isArray(columnConfig) ? columnConfig.length : 'invalid'} columns`)
+          }
           
           // Return existing data with no-cache headers
           return NextResponse.json(
@@ -218,14 +223,25 @@ export async function POST(request: NextRequest) {
           const beforeSave = await collection.findOne({ userEmail })
           const beforeCount = beforeSave?.products?.length || 0
           
-          // Build update object - only include columnConfig if provided
+          // Build update object - always preserve existing columnConfig if not provided
+          // This ensures column config persists even when only products are updated
+          const existingDoc = await collection.findOne({ userEmail })
+          const existingColumnConfig = existingDoc?.columnConfig || null
+          
           const updateData: any = {
             userEmail,
             products,
             updatedAt: new Date()
           }
+          
+          // If columnConfig is provided, use it. Otherwise, preserve existing config
           if (columnConfig !== undefined) {
             updateData.columnConfig = columnConfig
+            console.log(`[POST] Saving column configuration: ${columnConfig.length} columns`)
+          } else if (existingColumnConfig) {
+            // Preserve existing column config if not provided in request
+            updateData.columnConfig = existingColumnConfig
+            console.log(`[POST] Preserving existing column configuration: ${existingColumnConfig.length} columns`)
           }
           
           const result = await collection.updateOne(
@@ -239,9 +255,22 @@ export async function POST(request: NextRequest) {
           // Verify data was saved correctly
           const afterSave = await collection.findOne({ userEmail })
           const afterCount = afterSave?.products?.length || 0
+          const savedColumnConfig = afterSave?.columnConfig || null
           
           console.log(`[POST] MongoDB save for ${userEmail}: ${result.modifiedCount} modified, ${result.upsertedCount} inserted, ${products.length} products saved`)
           console.log(`[POST] Data verification: Before=${beforeCount} products, After=${afterCount} products`)
+          
+          // Verify column configuration was saved
+          if (columnConfig !== undefined) {
+            const columnConfigSaved = JSON.stringify(savedColumnConfig) === JSON.stringify(columnConfig)
+            if (columnConfigSaved) {
+              console.log(`[POST] ✓ Column configuration saved successfully (${columnConfig.length} columns)`)
+            } else {
+              console.warn(`[POST] ⚠ Column configuration may not have saved correctly`)
+              console.warn(`[POST] Expected: ${JSON.stringify(columnConfig).substring(0, 100)}...`)
+              console.warn(`[POST] Saved: ${JSON.stringify(savedColumnConfig).substring(0, 100)}...`)
+            }
+          }
           
           // Alert if data count decreased unexpectedly (potential data loss)
           if (beforeCount > 0 && afterCount < beforeCount && products.length < beforeCount) {
@@ -251,7 +280,13 @@ export async function POST(request: NextRequest) {
           // Return success - data is now safely stored in MongoDB
           // This data will survive all future code updates and deployments
           return NextResponse.json(
-            { success: true, products, saved: true, storage: 'mongodb' },
+            { 
+              success: true, 
+              products, 
+              saved: true, 
+              storage: 'mongodb',
+              columnConfig: savedColumnConfig || columnConfig // Return saved config
+            },
             {
               headers: {
                 'Cache-Control': 'no-store, no-cache, must-revalidate',

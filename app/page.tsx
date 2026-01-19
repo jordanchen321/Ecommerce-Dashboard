@@ -103,13 +103,16 @@ export default function Home() {
             lastSavedProductsRef.current = data.products
             
             // Load column configuration if available
+            // Column config is stored in MongoDB and persists across all devices and sessions
             if (data.columnConfig && Array.isArray(data.columnConfig) && data.columnConfig.length > 0) {
+              console.log(`[Frontend] ✓ Loaded ${data.columnConfig.length} column configurations from MongoDB (persistent across devices)`)
+              console.log(`[Frontend] Column config:`, data.columnConfig.map(c => ({ field: c.field, label: c.label, visible: c.visible, isCustom: c.isCustom })))
               setColumns(data.columnConfig)
               lastSavedColumnsRef.current = data.columnConfig
-              console.log(`[Frontend] Loaded ${data.columnConfig.length} column configurations`)
             } else {
-              // Use default columns if no config exists
+              // Use default columns if no config exists (first time user)
               const defaultCols = getDefaultColumns()
+              console.log(`[Frontend] No column config found in MongoDB, using default columns (will be saved on first change)`)
               setColumns(defaultCols)
               lastSavedColumnsRef.current = defaultCols
             }
@@ -230,8 +233,19 @@ export default function Home() {
         })
         
         if (response.ok) {
-          lastSavedColumnsRef.current = columns
-          console.log(`[Frontend] ✓ Successfully saved column configuration`)
+          const data = await response.json()
+          // Update with the saved column config from server to ensure sync
+          if (data.columnConfig && Array.isArray(data.columnConfig)) {
+            lastSavedColumnsRef.current = data.columnConfig
+            console.log(`[Frontend] ✓ Successfully saved column configuration (${data.columnConfig.length} columns)`)
+            console.log(`[Frontend] Column config synced:`, data.columnConfig.map((c: ColumnConfig) => ({ field: c.field, label: c.label, visible: c.visible, isCustom: c.isCustom })))
+          } else {
+            lastSavedColumnsRef.current = columns
+            console.log(`[Frontend] ✓ Successfully saved column configuration`)
+          }
+        } else {
+          const errorData = await response.json().catch(() => ({}))
+          console.error(`[Frontend] Failed to save column configuration: ${response.status} ${response.statusText}`, errorData)
         }
       } catch (error) {
         console.error('[Frontend] Error saving column configuration:', error)
