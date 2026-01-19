@@ -8,6 +8,7 @@ import SearchBar from "@/components/SearchBar"
 import LanguageSwitcher from "@/components/LanguageSwitcher"
 import ColumnManager, { type ColumnConfig } from "@/components/ColumnManager"
 import EditProductModal from "@/components/EditProductModal"
+import FormulaColumnsEditor from "@/components/FormulaColumnsEditor"
 import { useLanguage } from "@/contexts/LanguageContext"
 
 export interface Product {
@@ -499,6 +500,7 @@ export default function Home() {
                 onAdd={handleAddProduct} 
                 customColumns={columns.filter(col => col.isCustom)}
               />
+              <FormulaColumnsEditor columns={columns} onColumnsChange={setColumns} />
             </div>
           </div>
 

@@ -60,6 +60,11 @@ interface Translations {
   'columns.error.duplicate': string
   'columns.error.formulaRequired': string
   'columns.error.nonNumericColumn': string
+  'formulaEditor.title': string
+  'formulaEditor.save': string
+  'formulaEditor.hint': string
+  'formulaEditor.empty': string
+  'formulaEditor.error.required': string
 }
 
 export const translations: Record<Language, Translations> = {
@@ -123,6 +128,11 @@ export const translations: Record<Language, Translations> = {
     'columns.error.duplicate': 'A column with this name already exists',
     'columns.error.formulaRequired': 'Please enter a formula expression',
     'columns.error.nonNumericColumn': 'Formula can only use numeric columns. "{column}" is not a numeric column.',
+    'formulaEditor.title': 'Formula Columns',
+    'formulaEditor.save': 'Save formulas',
+    'formulaEditor.hint': 'Edit formulas here. Only numeric columns can be referenced.',
+    'formulaEditor.empty': 'No formula columns yet. Create one from Manage Columns.',
+    'formulaEditor.error.required': 'Please enter a formula expression',
   },
   zh: {
     'app.title': '电商仪表板',
@@ -184,6 +194,11 @@ export const translations: Record<Language, Translations> = {
     'columns.error.duplicate': '已存在具有此名称的列',
     'columns.error.formulaRequired': '请输入公式表达式',
     'columns.error.nonNumericColumn': '公式只能使用数字列。"{column}" 不是数字列。',
+    'formulaEditor.title': '公式列',
+    'formulaEditor.save': '保存公式',
+    'formulaEditor.hint': '在这里编辑公式。只能引用数字列。',
+    'formulaEditor.empty': '还没有公式列。请从“管理列”中创建。',
+    'formulaEditor.error.required': '请输入公式表达式',
   },
 }
 
