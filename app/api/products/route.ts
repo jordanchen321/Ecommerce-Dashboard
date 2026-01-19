@@ -66,8 +66,11 @@ export async function GET() {
             }
           )
         }
-      } catch (error) {
-        console.error("[GET] MongoDB error, falling back to in-memory:", error)
+      } catch (error: any) {
+        console.error("[GET] MongoDB error, falling back to in-memory:", error.message || error)
+        if (error.message?.includes('MongoParseError') || error.message?.includes('Protocol and host')) {
+          console.error("[GET] Connection string error - check if password contains @ symbol and needs URL encoding")
+        }
         // Fall through to in-memory storage only if MongoDB fails
       }
     }
@@ -180,8 +183,11 @@ export async function POST(request: NextRequest) {
             }
           )
         }
-      } catch (error) {
-        console.error("[POST] MongoDB error, falling back to in-memory:", error)
+      } catch (error: any) {
+        console.error("[POST] MongoDB error, falling back to in-memory:", error.message || error)
+        if (error.message?.includes('MongoParseError') || error.message?.includes('Protocol and host')) {
+          console.error("[POST] Connection string error - check if password contains @ symbol and needs URL encoding")
+        }
         // If MongoDB fails, log error but still try in-memory fallback
         // However, this means data won't persist across deployments
       }

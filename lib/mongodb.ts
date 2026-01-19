@@ -23,25 +23,57 @@ declare global {
 let clientPromise: Promise<MongoClient> | null = null
 
 if (uri) {
-  // TypeScript now knows uri is defined in this block
-  const mongoUri: string = uri
-  const options = {}
+  try {
+    // TypeScript now knows uri is defined in this block
+    const mongoUri: string = uri
+    
+    // Basic validation of MongoDB URI format
+    if (!mongoUri.startsWith('mongodb://') && !mongoUri.startsWith('mongodb+srv://')) {
+      console.error('[MongoDB] Invalid connection string format. Must start with mongodb:// or mongodb+srv://')
+    } else {
+      const options = {
+        // Connection pool options for serverless
+        maxPoolSize: 10,
+        minPoolSize: 1,
+        maxIdleTimeMS: 30000,
+        serverSelectionTimeoutMS: 5000,
+      }
 
-  if (process.env.NODE_ENV === 'development') {
-    // In development mode, use a global variable so that the value
-    // is preserved across module reloads caused by HMR (Hot Module Replacement).
-    // This ensures we don't create multiple connections during development.
-    if (!global._mongoClientPromise) {
-      const client = new MongoClient(mongoUri, options)
-      global._mongoClientPromise = client.connect()
+      if (process.env.NODE_ENV === 'development') {
+        // In development mode, use a global variable so that the value
+        // is preserved across module reloads caused by HMR (Hot Module Replacement).
+        // This ensures we don't create multiple connections during development.
+        if (!global._mongoClientPromise) {
+          const client = new MongoClient(mongoUri, options)
+          global._mongoClientPromise = client.connect().catch((error: unknown) => {
+            const errorMessage = error instanceof Error ? error.message : String(error)
+            console.error('[MongoDB] Connection error:', errorMessage)
+            console.error('[MongoDB] If your password contains special characters like @, #, %, encode them: @ = %40, # = %23, % = %25')
+            throw error
+          })
+        }
+        clientPromise = global._mongoClientPromise
+      } else {
+        // In production mode, this module will be cached by Node.js
+        // Each serverless function invocation will reuse the same client promise
+        // This is safe because serverless functions can be reused across requests
+        const client = new MongoClient(mongoUri, options)
+        clientPromise = client.connect().catch((error: unknown) => {
+          const errorMessage = error instanceof Error ? error.message : String(error)
+          console.error('[MongoDB] Connection error:', errorMessage)
+          console.error('[MongoDB] If your password contains special characters like @, #, %, encode them: @ = %40, # = %23, % = %25')
+          throw error
+        })
+      }
     }
-    clientPromise = global._mongoClientPromise
-  } else {
-    // In production mode, this module will be cached by Node.js
-    // Each serverless function invocation will reuse the same client promise
-    // This is safe because serverless functions can be reused across requests
-    const client = new MongoClient(mongoUri, options)
-    clientPromise = client.connect()
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    console.error('[MongoDB] Failed to initialize client:', errorMessage)
+    if (errorMessage.includes('Protocol and host list are required')) {
+      console.error('[MongoDB] Connection string parsing error - check if password contains @ symbol')
+      console.error('[MongoDB] If password is "password@123", encode it as "password%40@123"')
+    }
+    clientPromise = null
   }
 }
 
