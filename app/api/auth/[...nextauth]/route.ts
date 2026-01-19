@@ -10,6 +10,11 @@ if (!process.env.NEXTAUTH_SECRET) {
   throw new Error("Missing NEXTAUTH_SECRET. Please set NEXTAUTH_SECRET environment variable.")
 }
 
+// Warn if NEXTAUTH_URL is not set (required for OAuth redirects)
+if (!process.env.NEXTAUTH_URL) {
+  console.warn("⚠️  NEXTAUTH_URL is not set. OAuth redirects may fail. Set NEXTAUTH_URL=http://localhost:3000 in your .env.local file.")
+}
+
 export const authOptions: NextAuthOptions = {
   providers: [
     GoogleProvider({
