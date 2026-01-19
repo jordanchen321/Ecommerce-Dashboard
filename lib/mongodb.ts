@@ -135,6 +135,40 @@ if (uri) {
   console.warn('[MongoDB] MongoDB will not be available - data will be saved to memory only')
 }
 
+// Helper function to check if the client promise is actually usable
+// This helps detect if the promise was rejected during initialization
+export async function isMongoDBConnected(): Promise<boolean> {
+  if (!clientPromise) {
+    console.log('[MongoDB] clientPromise is null - MongoDB not configured or initialization failed')
+    return false
+  }
+  try {
+    const client = await clientPromise
+    if (!client) {
+      console.log('[MongoDB] Client is null after awaiting promise')
+      return false
+    }
+    // Try a simple ping to verify connection is alive
+    await client.db("admin").command({ ping: 1 })
+    console.log('[MongoDB] ✓ Connection verified - MongoDB is connected and working')
+    return true
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    console.error('[MongoDB] ❌ Connection check failed:', errorMessage)
+    if (errorMessage.includes('authentication failed')) {
+      console.error('[MongoDB] Authentication failed - check username and password in MONGODB_URI')
+    } else if (errorMessage.includes('ENOTFOUND') || errorMessage.includes('getaddrinfo')) {
+      console.error('[MongoDB] DNS resolution failed - check cluster hostname in MONGODB_URI')
+    } else if (errorMessage.includes('timeout')) {
+      console.error('[MongoDB] Connection timeout - check network/firewall settings')
+    } else if (errorMessage.includes('MongoParseError') || errorMessage.includes('Protocol and host')) {
+      console.error('[MongoDB] Connection string parsing error - check if password contains special characters')
+      console.error('[MongoDB] Special characters must be URL encoded: @ = %40, # = %23, % = %25')
+    }
+    return false
+  }
+}
+
 // Export a module-scoped promise. By doing this in a
 // separate module, the client can be shared across functions.
 // Returns null if MONGODB_URI is not configured (app will use in-memory fallback)

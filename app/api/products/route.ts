@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth/next"
 import { authOptions } from "@/app/api/auth/[...nextauth]/route"
-import clientPromise from "@/lib/mongodb"
+import clientPromise, { isMongoDBConnected } from "@/lib/mongodb"
 
 // Column configuration type (matches frontend)
 interface ColumnConfig {
@@ -78,9 +78,10 @@ export async function GET() {
     // Use MongoDB if configured (persists across deployments)
     // MongoDB data survives all code updates and deployments
     const mongoConfigured = isMongoDBConfigured()
-    console.log(`[GET] MongoDB check: configured=${mongoConfigured}, clientPromise=${!!clientPromise}`)
+    const isConnected = mongoConfigured && clientPromise ? await isMongoDBConnected() : false
+    console.log(`[GET] MongoDB check: configured=${mongoConfigured}, clientPromise=${!!clientPromise}, isConnected=${isConnected}`)
     
-    if (mongoConfigured && clientPromise) {
+    if (mongoConfigured && clientPromise && isConnected) {
       try {
         console.log(`[GET] Attempting to connect to MongoDB...`)
         const client = await clientPromise
@@ -223,9 +224,10 @@ export async function POST(request: NextRequest) {
     // Use MongoDB if configured (persists across deployments)
     // MongoDB is the source of truth - all code updates preserve data in MongoDB
     const mongoConfigured = isMongoDBConfigured()
-    console.log(`[POST] MongoDB check: configured=${mongoConfigured}, clientPromise=${!!clientPromise}`)
+    const isConnected = mongoConfigured && clientPromise ? await isMongoDBConnected() : false
+    console.log(`[POST] MongoDB check: configured=${mongoConfigured}, clientPromise=${!!clientPromise}, isConnected=${isConnected}`)
     
-    if (mongoConfigured && clientPromise) {
+    if (mongoConfigured && clientPromise && isConnected) {
       try {
         console.log(`[POST] Attempting to connect to MongoDB...`)
         const client = await clientPromise
