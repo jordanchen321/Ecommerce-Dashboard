@@ -9,7 +9,7 @@ A modern web application for managing products with Google authentication.
 - 📊 View all products in a table
 - 🔍 Search products by Product ID
 - 🗑️ Remove products from the list
-- 💾 Products are saved per user in localStorage
+- 💾 Products are saved per user and sync across devices (with MongoDB)
 
 ## Getting Started
 
@@ -31,6 +31,7 @@ NEXTAUTH_URL=http://localhost:3000
 NEXTAUTH_SECRET=your-secret-key-here
 GOOGLE_CLIENT_ID=your-google-client-id
 GOOGLE_CLIENT_SECRET=your-google-client-secret
+MONGODB_URI=your-mongodb-connection-string (optional - for cross-device sync)
 ```
 
 3. Get Google OAuth credentials:
@@ -102,6 +103,29 @@ npm run dev
 
 **Important:** The website will only work fully after you set all environment variables in Vercel and update the Google OAuth redirect URLs.
 
+### Optional: Set Up MongoDB for Cross-Device Data Sync
+
+To enable data synchronization across devices (so products sync between phone, laptop, etc.):
+
+1. **Create a MongoDB Atlas account:**
+   - Go to [MongoDB Atlas](https://www.mongodb.com/cloud/atlas/register)
+   - Create a free cluster (M0 tier)
+
+2. **Get your connection string:**
+   - Click "Connect" on your cluster
+   - Choose "Connect your application"
+   - Copy the connection string (format: `mongodb+srv://username:password@cluster.mongodb.net/`)
+   - Replace `<password>` with your database password
+   - Optionally add `ecommerce-dashboard` at the end: `...mongodb.net/ecommerce-dashboard`
+
+3. **Add to environment variables:**
+   - **Vercel**: Settings → Environment Variables → Add `MONGODB_URI` with your connection string
+   - **Local dev**: Add `MONGODB_URI=your-connection-string` to `.env.local`
+
+4. **Redeploy** after adding `MONGODB_URI`
+
+**Note:** Without MongoDB, data won't sync across devices. With MongoDB, your products will be available on all devices when you sign in with the same Google account.
+
 ## Technologies Used
 
 - Next.js 14 (App Router)
@@ -109,7 +133,7 @@ npm run dev
 - TypeScript
 - NextAuth.js (Google OAuth)
 - Tailwind CSS
-- localStorage (for data persistence)
+- MongoDB (optional - for cross-device data sync)
 
 ## Project Structure
 

@@ -24,56 +24,72 @@ export default function Home() {
   const [searchTerm, setSearchTerm] = useState("")
   const [isLoaded, setIsLoaded] = useState(false)
 
-  // Load products from localStorage when user signs in
+  // Load products from API when user signs in
   useEffect(() => {
-    if (typeof window === 'undefined') return // Prevent SSR issues
-    
-    if (session?.user?.email) {
+    if (!session?.user?.email) {
+      // Clear products when session is null (signed out)
+      setProducts([])
+      setFilteredProducts([])
+      setSearchTerm("")
+      setIsLoaded(false)
+      return
+    }
+
+    // Fetch products from API
+    const fetchProducts = async () => {
       try {
-        const savedProducts = localStorage.getItem(`products_${session.user.email}`)
-        if (savedProducts) {
-          const parsed = JSON.parse(savedProducts)
-          if (Array.isArray(parsed)) {
-            setProducts(parsed)
-            setFilteredProducts(parsed)
+        const response = await fetch('/api/products')
+        if (response.ok) {
+          const data = await response.json()
+          if (Array.isArray(data.products)) {
+            setProducts(data.products)
+            setFilteredProducts(data.products)
           } else {
             setProducts([])
             setFilteredProducts([])
           }
         } else {
-          // No saved products for this user - start with empty array
+          // If unauthorized or error, start with empty array
           setProducts([])
           setFilteredProducts([])
         }
-        setIsLoaded(true) // Mark as loaded after reading from localStorage
+        setIsLoaded(true)
       } catch (error) {
         console.error('Error loading products:', error)
         setProducts([])
         setFilteredProducts([])
         setIsLoaded(true)
       }
-    } else {
-      // Clear products when session is null (signed out)
-      setProducts([])
-      setFilteredProducts([])
-      setSearchTerm("")
-      setIsLoaded(false)
     }
+
+    fetchProducts()
   }, [session?.user?.email])
 
-  // Save products to localStorage whenever products change (tied to user email)
+  // Save products to API whenever products change (tied to user email)
   // Only save after initial data is loaded to prevent overwriting with empty array
   useEffect(() => {
-    if (typeof window === 'undefined') return // Prevent SSR issues
-    
-    if (session?.user?.email && isLoaded) {
+    if (!session?.user?.email || !isLoaded) return
+
+    // Debounce API calls - wait a bit before saving to avoid too many requests
+    const timeoutId = setTimeout(async () => {
       try {
-        localStorage.setItem(`products_${session.user.email}`, JSON.stringify(products))
-        // Data is now safely saved and will persist after browser close
+        const response = await fetch('/api/products', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ products }),
+        })
+        
+        if (!response.ok) {
+          console.error('Failed to save products to server')
+        }
       } catch (error) {
         console.error('Error saving products:', error)
       }
-    }
+    }, 500) // Wait 500ms after last change before saving
+
+    return () => clearTimeout(timeoutId)
   }, [products, session?.user?.email, isLoaded])
 
   // Filter products based on search term
