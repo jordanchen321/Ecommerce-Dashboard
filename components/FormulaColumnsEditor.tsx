@@ -44,6 +44,7 @@ export default function FormulaColumnsEditor({ columns, onColumnsChange }: Formu
   )
 
   const [drafts, setDrafts] = useState<Record<string, string>>({})
+  const [editingIds, setEditingIds] = useState<Set<string>>(new Set())
 
   // Keep drafts in sync with columns (e.g. when loading from server)
   useEffect(() => {
@@ -53,6 +54,49 @@ export default function FormulaColumnsEditor({ columns, onColumnsChange }: Formu
     }
     setDrafts(next)
   }, [formulaColumns])
+
+  const startEditing = (columnId: string) => {
+    setEditingIds(prev => new Set(prev).add(columnId))
+  }
+
+  const cancelEditing = (columnId: string) => {
+    // Reset draft to original formula
+    const column = formulaColumns.find(c => c.id === columnId)
+    if (column) {
+      setDrafts(prev => ({ ...prev, [columnId]: column.formula || "" }))
+    }
+    setEditingIds(prev => {
+      const next = new Set(prev)
+      next.delete(columnId)
+      return next
+    })
+  }
+
+  const saveSingle = (columnId: string) => {
+    const column = formulaColumns.find(c => c.id === columnId)
+    if (!column) return
+
+    const draft = drafts[columnId] ?? ""
+    const err = validateFormula(draft)
+    if (err) {
+      alert(err)
+      return
+    }
+
+    onColumnsChange(
+      columns.map((c) => {
+        if (c.id !== columnId) return c
+        return { ...c, formula: draft.trim() }
+      })
+    )
+
+    // Exit edit mode
+    setEditingIds(prev => {
+      const next = new Set(prev)
+      next.delete(columnId)
+      return next
+    })
+  }
 
   const validateFormula = (formula: string): string | null => {
     const text = formula.trim()
@@ -126,52 +170,94 @@ export default function FormulaColumnsEditor({ columns, onColumnsChange }: Formu
       </p>
 
       <div className="space-y-4">
-        {formulaColumns.map((col) => (
-          <div key={col.id} className="bg-gray-50 border border-gray-200 rounded-lg p-3">
-            <div className="flex items-start justify-between gap-3 mb-2">
-              <div className="min-w-0">
-                <div className="text-sm font-medium text-gray-800 truncate">{col.label}</div>
-                <div className="text-xs text-gray-500 font-mono truncate">{col.field}</div>
-              </div>
-            </div>
+        {formulaColumns.map((col) => {
+          const isEditing = editingIds.has(col.id)
+          const currentFormula = col.formula || ""
+          const draftFormula = drafts[col.id] ?? currentFormula
 
-            <input
-              type="text"
-              value={drafts[col.id] ?? ""}
-              onChange={(e) => setDrafts((prev) => ({ ...prev, [col.id]: e.target.value }))}
-              placeholder={t("columns.formulaPlaceholder") || "e.g., price * quantity"}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
-            />
-
-            <div className="mt-2">
-              <div className="text-xs text-gray-500 mb-1">
-                {t("columns.availableColumns") || "Available columns:"}
-              </div>
-              <div className="flex flex-wrap gap-1">
-                {numericFields.map((name) => (
+          return (
+            <div key={col.id} className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+              <div className="flex items-start justify-between gap-3 mb-2">
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium text-gray-800 truncate">{col.label}</div>
+                  <div className="text-xs text-gray-500 font-mono truncate">{col.field}</div>
+                </div>
+                {!isEditing ? (
                   <button
-                    key={`${col.id}-${name}`}
                     type="button"
-                    onClick={() =>
-                      setDrafts((prev) => ({
-                        ...prev,
-                        [col.id]: `${prev[col.id] ?? ""}${prev[col.id] ? " " : ""}${name}`,
-                      }))
-                    }
-                    className="px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs hover:bg-blue-100"
+                    onClick={() => startEditing(col.id)}
+                    className="text-blue-600 hover:text-blue-800 text-sm font-medium px-2 py-1 rounded transition flex-shrink-0"
                   >
-                    {name}
+                    {t("table.edit") || "Edit"}
                   </button>
-                ))}
+                ) : (
+                  <div className="flex gap-2 flex-shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => saveSingle(col.id)}
+                      className="text-green-600 hover:text-green-800 text-sm font-medium px-2 py-1 rounded transition"
+                    >
+                      {t("modal.save") || "Save"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => cancelEditing(col.id)}
+                      className="text-gray-600 hover:text-gray-800 text-sm font-medium px-2 py-1 rounded transition"
+                    >
+                      {t("modal.cancel") || "Cancel"}
+                    </button>
+                  </div>
+                )}
               </div>
-              {numericFields.length === 0 && (
-                <div className="mt-1 text-amber-600 text-xs font-medium">
-                  {t("columns.noNumericColumns") || "No numeric columns available. Add number or currency columns first."}
+
+              {isEditing ? (
+                <>
+                  <input
+                    type="text"
+                    value={draftFormula}
+                    onChange={(e) => setDrafts((prev) => ({ ...prev, [col.id]: e.target.value }))}
+                    placeholder={t("columns.formulaPlaceholder") || "e.g., price * quantity"}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                  />
+
+                  <div className="mt-2">
+                    <div className="text-xs text-gray-500 mb-1">
+                      {t("columns.availableColumns") || "Available columns:"}
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {numericFields.map((name) => (
+                        <button
+                          key={`${col.id}-${name}`}
+                          type="button"
+                          onClick={() =>
+                            setDrafts((prev) => ({
+                              ...prev,
+                              [col.id]: `${prev[col.id] ?? ""}${prev[col.id] ? " " : ""}${name}`,
+                            }))
+                          }
+                          className="px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs hover:bg-blue-100"
+                        >
+                          {name}
+                        </button>
+                      ))}
+                    </div>
+                    {numericFields.length === 0 && (
+                      <div className="mt-1 text-amber-600 text-xs font-medium">
+                        {t("columns.noNumericColumns") || "No numeric columns available. Add number or currency columns first."}
+                      </div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="px-3 py-2 bg-white border border-gray-200 rounded-lg">
+                  <code className="text-sm text-gray-700 font-mono break-all">
+                    {currentFormula || <span className="text-gray-400 italic">No formula set</span>}
+                  </code>
                 </div>
               )}
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
