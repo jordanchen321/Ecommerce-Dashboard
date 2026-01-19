@@ -91,14 +91,7 @@ export async function GET() {
     const mongoConfigured = isMongoDBConfigured()
     console.log(`[GET] MongoDB check: configured=${mongoConfigured}, clientPromise=${!!clientPromise}`)
 
-    // If MongoDB is configured but the clientPromise is missing, refuse memory fallback.
-    if (mongoConfigured && !clientPromise) {
-      return NextResponse.json(
-        { error: "MongoDB temporarily unavailable" },
-        { status: 503 }
-      )
-    }
-
+    // Try MongoDB first if configured
     if (mongoConfigured && clientPromise) {
       try {
         console.log(`[GET] Attempting to connect to MongoDB...`)
@@ -161,12 +154,10 @@ export async function GET() {
           )
         }
       } catch (error: any) {
-        console.error("[GET] ❌❌❌ MongoDB operation failed. Refusing in-memory fallback to avoid inconsistent state.")
+        console.error("[GET] ❌ MongoDB operation failed, falling back to in-memory storage")
         console.error("[GET] Error details:", error.message || error)
-        console.error("[GET] Error stack:", error.stack)
         if (error.message?.includes('MongoParseError') || error.message?.includes('Protocol and host')) {
           console.error("[GET] Connection string error - check if password contains @ symbol and needs URL encoding")
-          console.error("[GET] If password is 'pass@123', encode @ as %40: 'pass%40123'")
         }
         if (error.message?.includes('authentication failed')) {
           console.error("[GET] Authentication failed - check MongoDB username and password")
@@ -174,35 +165,22 @@ export async function GET() {
         if (error.message?.includes('timeout')) {
           console.error("[GET] Connection timeout - check network/firewall settings")
         }
-        return NextResponse.json(
-          { error: "MongoDB temporarily unavailable" },
-          {
-            status: 503,
-            headers: {
-              'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-              'Pragma': 'no-cache',
-              'Expires': '0',
-              'Surrogate-Control': 'no-store',
-            },
-          }
-        )
+        // Fall through to in-memory fallback
       }
     } else {
       if (!mongoConfigured) {
         console.warn(`[GET] ⚠ MongoDB not configured - MONGODB_URI environment variable not found`)
         console.warn(`[GET] Check: 1) .env.local exists, 2) MONGODB_URI is set, 3) Dev server was restarted`)
       }
-      if (!clientPromise) {
+      if (mongoConfigured && !clientPromise) {
         console.warn(`[GET] ⚠ MongoDB clientPromise is null - connection may have failed during initialization`)
-        console.warn(`[GET] Check server startup logs for MongoDB connection errors`)
+        console.warn(`[GET] Falling back to in-memory storage`)
       }
     }
 
-    console.warn(`[GET] ⚠ MongoDB not configured - using in-memory storage for ${userEmail}`)
-    console.warn(`[GET] To enable MongoDB: 1) Set MONGODB_URI in .env.local, 2) Restart dev server`)
-
     // Fallback to in-memory storage (WARNING: data lost on redeploy)
-    // This should only be used if MongoDB is not configured
+    // Used when MongoDB is not configured OR when MongoDB fails
+    console.warn(`[GET] ⚠ Using in-memory storage for ${userEmail} (MongoDB unavailable or not configured)`)
     const products = productsStore[userEmail] || []
     const columnConfig = columnConfigStore[userEmail] || null
     
@@ -272,15 +250,8 @@ export async function POST(request: NextRequest) {
     // MongoDB is the source of truth - all code updates preserve data in MongoDB
     const mongoConfigured = isMongoDBConfigured()
     console.log(`[POST] MongoDB check: configured=${mongoConfigured}, clientPromise=${!!clientPromise}`)
-
-    // If MongoDB is configured but the clientPromise is missing, refuse memory fallback.
-    if (mongoConfigured && !clientPromise) {
-      return NextResponse.json(
-        { error: "MongoDB temporarily unavailable" },
-        { status: 503 }
-      )
-    }
     
+    // Try MongoDB first if configured
     if (mongoConfigured && clientPromise) {
       try {
         console.log(`[POST] Attempting to connect to MongoDB...`)
@@ -530,12 +501,10 @@ export async function POST(request: NextRequest) {
           )
         }
       } catch (error: any) {
-        console.error("[POST] ❌❌❌ MongoDB operation failed. Refusing in-memory fallback to avoid inconsistent state.")
+        console.error("[POST] ❌ MongoDB operation failed, falling back to in-memory storage")
         console.error("[POST] Error details:", error.message || error)
-        console.error("[POST] Error stack:", error.stack)
         if (error.message?.includes('MongoParseError') || error.message?.includes('Protocol and host')) {
           console.error("[POST] Connection string error - check if password contains @ symbol and needs URL encoding")
-          console.error("[POST] If password is 'pass@123', encode @ as %40: 'pass%40123'")
         }
         if (error.message?.includes('authentication failed')) {
           console.error("[POST] Authentication failed - check MongoDB username and password")
@@ -543,19 +512,16 @@ export async function POST(request: NextRequest) {
         if (error.message?.includes('timeout')) {
           console.error("[POST] Connection timeout - check network/firewall settings")
         }
-        return NextResponse.json(
-          { error: "MongoDB temporarily unavailable" },
-          { status: 503 }
-        )
+        // Fall through to in-memory fallback
       }
     } else {
       if (!mongoConfigured) {
         console.warn(`[POST] ⚠ MongoDB not configured - MONGODB_URI environment variable not found`)
         console.warn(`[POST] Check: 1) .env.local exists, 2) MONGODB_URI is set, 3) Dev server was restarted`)
       }
-      if (!clientPromise) {
+      if (mongoConfigured && !clientPromise) {
         console.warn(`[POST] ⚠ MongoDB clientPromise is null - connection may have failed during initialization`)
-        console.warn(`[POST] Check server startup logs for MongoDB connection errors`)
+        console.warn(`[POST] Falling back to in-memory storage`)
       }
     }
 
