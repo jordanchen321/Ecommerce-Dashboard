@@ -13,7 +13,13 @@ export interface Product {
 
 // Fallback in-memory storage (only used if MongoDB is not configured)
 // Note: This won't persist across serverless function restarts on Vercel
+// IMPORTANT: Data will be lost on redeploy if MongoDB is not configured
 const productsStore: Record<string, Product[]> = {}
+
+// Helper function to check if MongoDB is configured
+function isMongoDBConfigured(): boolean {
+  return !!process.env.MONGODB_URI
+}
 
 // GET - Fetch products for the current user
 export async function GET() {
@@ -26,24 +32,26 @@ export async function GET() {
 
     const userEmail = session.user.email
 
-    // Use MongoDB if configured, otherwise fall back to in-memory
-    if (clientPromise) {
+    // Use MongoDB if configured (persists across deployments)
+    if (isMongoDBConfigured() && clientPromise) {
       try {
         const client = await clientPromise
-        const db = client.db("ecommerce-dashboard")
-        const collection = db.collection("products")
-        
-        const userProduct = await collection.findOne({ email: userEmail })
-        const products = userProduct?.products || []
-        
-        return NextResponse.json({ products })
+        if (client) {
+          const db = client.db("ecommerce_dashboard")
+          const collection = db.collection("products")
+          
+          const userProduct = await collection.findOne({ userEmail })
+          const products = (userProduct?.products || []) as Product[]
+          
+          return NextResponse.json({ products })
+        }
       } catch (error) {
         console.error("MongoDB error, falling back to in-memory:", error)
         // Fall through to in-memory storage
       }
     }
 
-    // Fallback to in-memory storage
+    // Fallback to in-memory storage (WARNING: data lost on redeploy)
     const products = productsStore[userEmail] || []
     return NextResponse.json({ products })
   } catch (error) {
@@ -73,28 +81,37 @@ export async function POST(request: NextRequest) {
 
     const userEmail = session.user.email
 
-    // Use MongoDB if configured, otherwise fall back to in-memory
-    if (clientPromise) {
+    // Use MongoDB if configured (persists across deployments)
+    if (isMongoDBConfigured() && clientPromise) {
       try {
         const client = await clientPromise
-        const db = client.db("ecommerce-dashboard")
-        const collection = db.collection("products")
-        
-        // Upsert - update if exists, create if not
-        await collection.updateOne(
-          { email: userEmail },
-          { $set: { email: userEmail, products, updatedAt: new Date() } },
-          { upsert: true }
-        )
-        
-        return NextResponse.json({ success: true, products })
+        if (client) {
+          const db = client.db("ecommerce_dashboard")
+          const collection = db.collection("products")
+          
+          // Upsert - update if exists, create if not
+          // Using userEmail as the key ensures data is tied to the user account
+          await collection.updateOne(
+            { userEmail },
+            { 
+              $set: { 
+                userEmail, 
+                products, 
+                updatedAt: new Date() 
+              } 
+            },
+            { upsert: true }
+          )
+          
+          return NextResponse.json({ success: true, products })
+        }
       } catch (error) {
         console.error("MongoDB error, falling back to in-memory:", error)
         // Fall through to in-memory storage
       }
     }
 
-    // Fallback to in-memory storage
+    // Fallback to in-memory storage (WARNING: data lost on redeploy)
     productsStore[userEmail] = products
     return NextResponse.json({ success: true, products })
   } catch (error) {

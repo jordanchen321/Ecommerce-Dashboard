@@ -124,6 +124,12 @@ To enable data synchronization across devices (so products sync between phone, l
 
 4. **Redeploy** after adding `MONGODB_URI`
 
+**Important Data Persistence Notes:**
+
+- **With MongoDB**: Your product data will persist across deployments, server restarts, and device switches. Data is stored in the cloud and tied to your Google account email.
+- **Without MongoDB**: Data is stored in-memory only and will be **lost** when you redeploy or when the serverless function restarts on Vercel.
+- **To ensure data survives updates**: Set up MongoDB and configure `MONGODB_URI` in your environment variables.
+
 **Note:** Without MongoDB, data won't sync across devices. With MongoDB, your products will be available on all devices when you sign in with the same Google account.
 
 ## Technologies Used
