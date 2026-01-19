@@ -61,19 +61,19 @@ export default function ProductTable({ products, onRemove }: ProductTableProps) 
                 )}
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                {product.productId}
+                {product.productId || '-'}
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                {product.name}
+                {product.name || '-'}
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                ${product.price.toFixed(2)}
+                ${(typeof product.price === 'number' ? product.price : 0).toFixed(2)}
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                {product.quantity}
+                {typeof product.quantity === 'number' ? product.quantity : 0}
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                ${(product.price * product.quantity).toFixed(2)}
+                ${((typeof product.price === 'number' ? product.price : 0) * (typeof product.quantity === 'number' ? product.quantity : 0)).toFixed(2)}
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                 <button

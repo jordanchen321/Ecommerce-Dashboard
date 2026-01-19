@@ -14,6 +14,8 @@ export interface Product {
   productId: string
   quantity: number
   image?: string // Image URL or base64 data URL
+  // Allow additional fields from MongoDB that may not be in the interface
+  [key: string]: any
 }
 
 // Fallback in-memory storage (only used if MongoDB is not configured)
@@ -24,6 +26,25 @@ const productsStore: Record<string, Product[]> = {}
 // Helper function to check if MongoDB is configured
 function isMongoDBConfigured(): boolean {
   return !!process.env.MONGODB_URI
+}
+
+// Helper function to normalize and validate product data from MongoDB
+// This ensures backward compatibility when schema changes are made
+function normalizeProduct(p: any): Product {
+  return {
+    id: p.id || p._id?.toString() || Date.now().toString(),
+    name: p.name || '',
+    price: typeof p.price === 'number' ? p.price : parseFloat(p.price) || 0,
+    productId: p.productId || '',
+    quantity: typeof p.quantity === 'number' ? p.quantity : parseInt(p.quantity) || 0,
+    image: p.image || undefined,
+    // Preserve any additional fields from MongoDB (for future schema extensions)
+    ...Object.fromEntries(
+      Object.entries(p).filter(([key]) => 
+        !['id', '_id', 'name', 'price', 'productId', 'quantity', 'image'].includes(key)
+      )
+    )
+  }
 }
 
 // GET - Fetch products for the current user
@@ -49,7 +70,11 @@ export async function GET() {
           
           // Always fetch from MongoDB - data persists regardless of code changes
           const userProduct = await collection.findOne({ userEmail })
-          const products = (userProduct?.products || []) as Product[]
+          const rawProducts = (userProduct?.products || []) as any[]
+          
+          // Normalize products: ensure all required fields exist with defaults if missing
+          // This makes the data resilient to schema changes - old data still works
+          const products: Product[] = rawProducts.map(normalizeProduct)
           
           console.log(`[GET] MongoDB fetch for ${userEmail}: Found ${products.length} products`)
           

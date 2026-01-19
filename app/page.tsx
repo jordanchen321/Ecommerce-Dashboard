@@ -15,6 +15,8 @@ export interface Product {
   productId: string
   quantity: number
   image?: string // Image URL or base64 data URL
+  // Allow additional fields from MongoDB that may not be in the interface
+  [key: string]: any
 }
 
 export default function Home() {
