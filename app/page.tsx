@@ -52,13 +52,14 @@ export default function Home() {
 
   // Load products from API when user signs in
   useEffect(() => {
-    // Don't clear products if session is still loading - wait for it to resolve
+    // Don't do anything while auth is loading
     if (status === "loading") {
       return
     }
 
-    // Only clear products if user explicitly signed out (session was set before and now is null)
-    if (!session?.user?.email) {
+    // ONLY clear when we know the user is signed out.
+    // During hydration, NextAuth can briefly have no email even while authenticating.
+    if (status === "unauthenticated") {
       // Cancel any in-flight requests
       if (abortControllerRef.current) {
         abortControllerRef.current.abort()
@@ -75,6 +76,11 @@ export default function Home() {
         isInitialLoadRef.current = true
         previousEmailRef.current = null
       }
+      return
+    }
+
+    // If authenticated but email isn't available yet, wait (do NOT clear).
+    if (!session?.user?.email) {
       return
     }
 
