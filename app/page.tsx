@@ -106,9 +106,9 @@ export default function Home() {
             // Column config is stored in MongoDB and persists across all devices and sessions
             if (data.columnConfig && Array.isArray(data.columnConfig) && data.columnConfig.length > 0) {
               console.log(`[Frontend] ✓ Loaded ${data.columnConfig.length} column configurations from MongoDB (persistent across devices)`)
-              console.log(`[Frontend] Column config:`, data.columnConfig.map(c => ({ field: c.field, label: c.label, visible: c.visible, isCustom: c.isCustom })))
-              setColumns(data.columnConfig)
-              lastSavedColumnsRef.current = data.columnConfig
+              console.log(`[Frontend] Column config:`, data.columnConfig.map((c: ColumnConfig) => ({ field: c.field, label: c.label, visible: c.visible, isCustom: c.isCustom })))
+              setColumns(data.columnConfig as ColumnConfig[])
+              lastSavedColumnsRef.current = data.columnConfig as ColumnConfig[]
             } else {
               // Use default columns if no config exists (first time user)
               const defaultCols = getDefaultColumns()
@@ -236,9 +236,9 @@ export default function Home() {
           const data = await response.json()
           // Update with the saved column config from server to ensure sync
           if (data.columnConfig && Array.isArray(data.columnConfig)) {
-            lastSavedColumnsRef.current = data.columnConfig
+            lastSavedColumnsRef.current = data.columnConfig as ColumnConfig[]
             console.log(`[Frontend] ✓ Successfully saved column configuration (${data.columnConfig.length} columns)`)
-            console.log(`[Frontend] Column config synced:`, data.columnConfig.map((c: ColumnConfig) => ({ field: c.field, label: c.label, visible: c.visible, isCustom: c.isCustom })))
+            console.log(`[Frontend] Column config synced:`, (data.columnConfig as ColumnConfig[]).map((c: ColumnConfig) => ({ field: c.field, label: c.label, visible: c.visible, isCustom: c.isCustom })))
           } else {
             lastSavedColumnsRef.current = columns
             console.log(`[Frontend] ✓ Successfully saved column configuration`)
