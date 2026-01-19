@@ -218,6 +218,7 @@ export default function ColumnManager({ columns, onColumnsChange, availableField
               </button>
             </div>
           </div>
+          </div>
         </>
       )}
     </div>
