@@ -92,9 +92,12 @@ export async function GET() {
             console.warn(`[GET] Document keys:`, Object.keys(userProduct))
           }
           
+          // Also fetch column configuration if it exists
+          const columnConfig = userProduct?.columnConfig || null
+          
           // Return existing data with no-cache headers
           return NextResponse.json(
-            { products },
+            { products, columnConfig },
             {
               headers: {
                 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
@@ -157,7 +160,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { products } = body as { products: Product[] }
+    const { products, columnConfig } = body as { products: Product[], columnConfig?: any }
 
     if (!Array.isArray(products)) {
       return NextResponse.json(
@@ -215,14 +218,20 @@ export async function POST(request: NextRequest) {
           const beforeSave = await collection.findOne({ userEmail })
           const beforeCount = beforeSave?.products?.length || 0
           
+          // Build update object - only include columnConfig if provided
+          const updateData: any = {
+            userEmail,
+            products,
+            updatedAt: new Date()
+          }
+          if (columnConfig !== undefined) {
+            updateData.columnConfig = columnConfig
+          }
+          
           const result = await collection.updateOne(
             { userEmail },
             { 
-              $set: { 
-                userEmail, 
-                products, 
-                updatedAt: new Date() 
-              } 
+              $set: updateData
             },
             { upsert: true }
           )

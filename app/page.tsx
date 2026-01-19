@@ -6,6 +6,7 @@ import ProductForm from "@/components/ProductForm"
 import ProductTable from "@/components/ProductTable"
 import SearchBar from "@/components/SearchBar"
 import LanguageSwitcher from "@/components/LanguageSwitcher"
+import ColumnManager, { type ColumnConfig } from "@/components/ColumnManager"
 import { useLanguage } from "@/contexts/LanguageContext"
 
 export interface Product {
@@ -29,6 +30,20 @@ export default function Home() {
   const isInitialLoadRef = useRef(true)
   const lastSavedProductsRef = useRef<Product[]>([])
   const previousEmailRef = useRef<string | null>(null)
+  
+  // Default column configuration function
+  const getDefaultColumns = (): ColumnConfig[] => [
+    { id: 'image', field: 'image', label: t('table.image') || 'Image', visible: true, isCustom: false, type: 'image' },
+    { id: 'productId', field: 'productId', label: t('table.productId') || 'Product ID', visible: true, isCustom: false, type: 'text' },
+    { id: 'name', field: 'name', label: t('table.name') || 'Name', visible: true, isCustom: false, type: 'text' },
+    { id: 'price', field: 'price', label: t('table.price') || 'Price', visible: true, isCustom: false, type: 'currency' },
+    { id: 'quantity', field: 'quantity', label: t('table.quantity') || 'Quantity', visible: true, isCustom: false, type: 'number' },
+    { id: 'totalValue', field: 'totalValue', label: t('table.totalValue') || 'Total Value', visible: true, isCustom: false, type: 'currency' },
+    { id: 'actions', field: 'actions', label: t('table.actions') || 'Actions', visible: true, isCustom: false, type: 'text' },
+  ]
+  
+  const [columns, setColumns] = useState<ColumnConfig[]>(getDefaultColumns())
+  const lastSavedColumnsRef = useRef<ColumnConfig[]>(getDefaultColumns())
 
   // Load products from API when user signs in
   useEffect(() => {
@@ -86,6 +101,18 @@ export default function Home() {
             setProducts(data.products)
             setFilteredProducts(data.products)
             lastSavedProductsRef.current = data.products
+            
+            // Load column configuration if available
+            if (data.columnConfig && Array.isArray(data.columnConfig) && data.columnConfig.length > 0) {
+              setColumns(data.columnConfig)
+              lastSavedColumnsRef.current = data.columnConfig
+              console.log(`[Frontend] Loaded ${data.columnConfig.length} column configurations`)
+            } else {
+              // Use default columns if no config exists
+              const defaultCols = getDefaultColumns()
+              setColumns(defaultCols)
+              lastSavedColumnsRef.current = defaultCols
+            }
           } else {
             console.warn('[Frontend] Invalid products data format received')
             setProducts([])
@@ -143,7 +170,7 @@ export default function Home() {
             'Pragma': 'no-cache',
           },
           cache: 'no-store',
-          body: JSON.stringify({ products }),
+          body: JSON.stringify({ products, columnConfig: columns }),
         })
         
         if (response.ok) {
@@ -179,7 +206,40 @@ export default function Home() {
     }, 500) // Wait 500ms after last change before saving
 
     return () => clearTimeout(timeoutId)
-  }, [products, session?.user?.email, isLoaded])
+  }, [products, columns, session?.user?.email, isLoaded])
+  
+  // Save column configuration when it changes
+  useEffect(() => {
+    if (!session?.user?.email || !isLoaded || isInitialLoadRef.current) return
+    
+    const columnsChanged = JSON.stringify(columns) !== JSON.stringify(lastSavedColumnsRef.current)
+    if (!columnsChanged) return
+    
+    const timeoutId = setTimeout(async () => {
+      try {
+        console.log(`[Frontend] Saving column configuration...`)
+        const response = await fetch('/api/products', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache',
+          },
+          cache: 'no-store',
+          body: JSON.stringify({ products, columnConfig: columns }),
+        })
+        
+        if (response.ok) {
+          lastSavedColumnsRef.current = columns
+          console.log(`[Frontend] ✓ Successfully saved column configuration`)
+        }
+      } catch (error) {
+        console.error('[Frontend] Error saving column configuration:', error)
+      }
+    }, 500)
+    
+    return () => clearTimeout(timeoutId)
+  }, [columns, products, session?.user?.email, isLoaded])
 
   // Filter products based on search term
   useEffect(() => {
@@ -313,12 +373,20 @@ export default function Home() {
                 <h2 className="text-lg sm:text-xl font-semibold text-gray-800">
                   {t('table.title')} ({filteredProducts.length})
                 </h2>
-                <SearchBar searchTerm={searchTerm} onSearchChange={setSearchTerm} />
+                <div className="flex items-center gap-2">
+                  <ColumnManager
+                    columns={columns}
+                    onColumnsChange={setColumns}
+                    availableFields={products.length > 0 ? Object.keys(products[0]) : []}
+                  />
+                  <SearchBar searchTerm={searchTerm} onSearchChange={setSearchTerm} />
+                </div>
               </div>
               {filteredProducts.length > 0 ? (
                 <ProductTable
                   products={filteredProducts}
                   onRemove={handleRemoveProduct}
+                  columns={columns}
                 />
               ) : (
                 <div className="text-center py-12 text-gray-500">
