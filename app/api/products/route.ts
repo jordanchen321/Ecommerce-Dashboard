@@ -262,24 +262,10 @@ export async function POST(request: NextRequest) {
           const db = client.db("ecommerce_dashboard")
           const collection = db.collection("products")
           
-          // CRITICAL Safety check: If trying to save empty array, check if there's existing data
-          // This prevents accidental data loss during initial load race conditions or connection issues
+          // Allow empty arrays - users may legitimately delete all products
+          // The frontend already has protection against accidental empty saves during initial load
           if (products.length === 0) {
-            const existing = await collection.findOne({ userEmail })
-            if (existing && existing.products && Array.isArray(existing.products) && existing.products.length > 0) {
-              // Don't overwrite existing data with empty array - return existing data instead
-              console.log(`[POST] ⚠ SAFETY CHECK: Prevented overwriting ${existing.products.length} products with empty array for user ${userEmail}`)
-              console.log(`[POST] This indicates a potential race condition - frontend tried to save empty array when data exists in database`)
-              return NextResponse.json({ 
-                success: true, 
-                products: existing.products,
-                message: "Preserved existing data",
-                warning: "Empty array was rejected - existing data preserved"
-              })
-            } else {
-              // No existing data - allow empty array (user has no products yet)
-              console.log(`[POST] Allowing empty array save for user ${userEmail} (no existing data found)`)
-            }
+            console.log(`[POST] Saving empty products array for user ${userEmail} (user deleted all products)`)
           }
           
           // CRITICAL: Use upsert to preserve data integrity

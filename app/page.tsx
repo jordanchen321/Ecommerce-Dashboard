@@ -340,10 +340,10 @@ export default function Home() {
     const productsChanged = JSON.stringify(products) !== JSON.stringify(lastSavedProductsRef.current)
     if (!productsChanged) return
 
-    // CRITICAL: Never save empty array if we had data before (prevents accidental deletion)
-    // This protects against race conditions where initial load fails but save effect runs
-    if (products.length === 0 && lastSavedProductsRef.current.length > 0) {
-      console.warn('[Frontend] ⚠ Prevented saving empty array - preserving existing data. This may indicate a data loading issue.')
+    // CRITICAL: Only prevent empty array save during initial load (race condition protection)
+    // Allow empty arrays if user explicitly deleted products (products.length < lastSavedProductsRef.current.length)
+    if (products.length === 0 && lastSavedProductsRef.current.length > 0 && isInitialLoadRef.current) {
+      console.warn('[Frontend] ⚠ Prevented saving empty array during initial load - preserving existing data. This may indicate a data loading issue.')
       return
     }
 
