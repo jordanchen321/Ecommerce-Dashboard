@@ -1,4 +1,4 @@
-import { MongoClient } from 'mongodb'
+import { MongoClient, ServerApiVersion } from 'mongodb'
 
 /**
  * MongoDB connection management for serverless environments (Vercel)
@@ -82,6 +82,12 @@ if (uri) {
         maxIdleTimeMS: 30000,
         serverSelectionTimeoutMS: 10000, // Increased timeout for initial connection
         connectTimeoutMS: 10000,
+        // Use Stable API version for better compatibility and future-proofing
+        serverApi: {
+          version: ServerApiVersion.v1,
+          strict: true,
+          deprecationErrors: true,
+        },
       }
 
       if (process.env.NODE_ENV === 'development') {
