@@ -146,8 +146,10 @@ export default function ColumnManager({ columns, onColumnsChange, availableField
     setNewColumnFormula("")
   }
 
-  const visibleColumns = columns.filter(col => col.visible)
-  const hiddenColumns = columns.filter(col => !col.visible)
+  // Exclude actions column from management UI
+  const managedColumns = columns.filter(col => col.field !== 'actions')
+  const visibleColumns = managedColumns.filter(col => col.visible)
+  const hiddenColumns = managedColumns.filter(col => !col.visible)
 
   const getDisplayLabel = (column: ColumnConfig): string => {
     // Always translate core/default columns at render time

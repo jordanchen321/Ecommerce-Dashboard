@@ -180,7 +180,9 @@ export default function ProductTable({ products, onRemove, onEdit, columns }: Pr
                 if (column.field === 'totalValue') {
                   const price = typeof product.price === 'number' ? product.price : undefined
                   const quantity = typeof product.quantity === 'number' ? product.quantity : undefined
-                  if (price === undefined || quantity === undefined) {
+                  const priceSet = (product as any).priceSet !== false
+                  const quantitySet = (product as any).quantitySet !== false
+                  if (!priceSet || !quantitySet || price === undefined || quantity === undefined) {
                     return (
                       <td key={column.id} className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
                         <span>-</span>
