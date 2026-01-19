@@ -3,6 +3,16 @@ import { getServerSession } from "next-auth/next"
 import { authOptions } from "@/app/api/auth/[...nextauth]/route"
 import clientPromise from "@/lib/mongodb"
 
+// Column configuration type (matches frontend)
+interface ColumnConfig {
+  id: string
+  field: string
+  label: string
+  visible: boolean
+  isCustom: boolean
+  type?: 'text' | 'number' | 'currency' | 'date' | 'image'
+}
+
 // Disable caching for this route
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -165,7 +175,10 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { products, columnConfig } = body as { products: Product[], columnConfig?: any }
+    const { products, columnConfig } = body as { products: Product[], columnConfig?: ColumnConfig[] | null }
+    
+    // Log what we received
+    console.log(`[POST] Received request: ${products.length} products, columnConfig: ${columnConfig !== undefined ? (Array.isArray(columnConfig) ? `${columnConfig.length} columns` : typeof columnConfig) : 'not provided'}`)
 
     if (!Array.isArray(products)) {
       return NextResponse.json(
@@ -223,8 +236,8 @@ export async function POST(request: NextRequest) {
           const beforeSave = await collection.findOne({ userEmail })
           const beforeCount = beforeSave?.products?.length || 0
           
-          // Build update object - always preserve existing columnConfig if not provided
-          // This ensures column config persists even when only products are updated
+          // Build update object - save both products and columnConfig to MongoDB
+          // Same pattern as products: always save what's provided, preserve what exists if not provided
           const existingDoc = await collection.findOne({ userEmail })
           const existingColumnConfig = existingDoc?.columnConfig || null
           
@@ -234,30 +247,36 @@ export async function POST(request: NextRequest) {
             updatedAt: new Date()
           }
           
-          // CRITICAL: Always save columnConfig if provided (even if empty array)
+          // CRITICAL: Save columnConfig the same way as products - always save if provided
           // This ensures custom columns are persisted to MongoDB across all devices
+          // Same pattern: if provided, save it; if not provided, preserve existing
           if (columnConfig !== undefined) {
-            // Explicitly save columnConfig - even if it's null or empty array
-            // This allows users to reset to defaults if needed
+            // Save columnConfig exactly as provided (same pattern as products)
+            // Even if it's an empty array, save it to MongoDB
             updateData.columnConfig = columnConfig
             if (Array.isArray(columnConfig)) {
-              const customCols = columnConfig.filter((c: any) => c.isCustom)
+              const customCols = columnConfig.filter((c: ColumnConfig) => c.isCustom)
               console.log(`[POST] 💾 Saving column configuration to MongoDB: ${columnConfig.length} total columns (${customCols.length} custom)`)
               if (customCols.length > 0) {
-                console.log(`[POST] Custom columns being saved:`, customCols.map((c: any) => ({ field: c.field, label: c.label, type: c.type })))
+                console.log(`[POST] Custom columns being saved:`, customCols.map((c: ColumnConfig) => ({ field: c.field, label: c.label, type: c.type })))
+              } else {
+                console.log(`[POST] No custom columns in this save (only core columns)`)
               }
             } else {
-              console.log(`[POST] ⚠ Column config is not an array:`, typeof columnConfig)
+              console.log(`[POST] ⚠ Column config is not an array:`, typeof columnConfig, columnConfig)
             }
-          } else if (existingColumnConfig) {
-            // Preserve existing column config if not provided in request
-            updateData.columnConfig = existingColumnConfig
-            console.log(`[POST] Preserving existing column configuration: ${Array.isArray(existingColumnConfig) ? existingColumnConfig.length : 'invalid'} columns`)
           } else {
-            // No columnConfig provided and none exists - this is fine for first-time users
-            console.log(`[POST] No column configuration provided or existing - will use defaults on next load`)
+            // If columnConfig not provided in request, preserve existing (same as products logic)
+            if (existingColumnConfig) {
+              updateData.columnConfig = existingColumnConfig
+              console.log(`[POST] Preserving existing column configuration: ${Array.isArray(existingColumnConfig) ? existingColumnConfig.length : 'invalid'} columns`)
+            } else {
+              console.log(`[POST] No columnConfig in request and none exists - will use defaults on next load`)
+            }
           }
           
+          // Save to MongoDB using upsert (same pattern as products)
+          // This ensures both products and columnConfig are persisted
           const result = await collection.updateOne(
             { userEmail },
             { 
@@ -266,34 +285,37 @@ export async function POST(request: NextRequest) {
             { upsert: true }
           )
           
-          // Verify data was saved correctly
+          // Verify data was saved correctly (same verification pattern as products)
           const afterSave = await collection.findOne({ userEmail })
           const afterCount = afterSave?.products?.length || 0
           const savedColumnConfig = afterSave?.columnConfig || null
           
-          console.log(`[POST] MongoDB save for ${userEmail}: ${result.modifiedCount} modified, ${result.upsertedCount} inserted, ${products.length} products saved`)
-          console.log(`[POST] Data verification: Before=${beforeCount} products, After=${afterCount} products`)
+          console.log(`[POST] MongoDB save for ${userEmail}: ${result.modifiedCount} modified, ${result.upsertedCount} inserted`)
+          console.log(`[POST] Products: ${products.length} saved, verified: ${afterCount} in DB`)
           
-          // Verify column configuration was saved
-          if (columnConfig !== undefined && columnConfig !== null) {
-            const columnConfigSaved = JSON.stringify(savedColumnConfig) === JSON.stringify(columnConfig)
-            if (columnConfigSaved) {
-              console.log(`[POST] ✓ Column configuration verified in MongoDB (${Array.isArray(columnConfig) ? columnConfig.length : 'invalid'} columns)`)
-              if (Array.isArray(columnConfig)) {
-                const customCols = columnConfig.filter(c => c.isCustom)
-                console.log(`[POST] ✓ Custom columns persisted: ${customCols.length}`, customCols.map(c => c.field))
-              }
-            } else {
-              console.warn(`[POST] ⚠ Column configuration may not have saved correctly`)
-              console.warn(`[POST] Expected columns: ${Array.isArray(columnConfig) ? columnConfig.length : 'invalid'}`)
-              console.warn(`[POST] Saved columns: ${Array.isArray(savedColumnConfig) ? savedColumnConfig.length : 'invalid'}`)
-              if (Array.isArray(columnConfig) && Array.isArray(savedColumnConfig)) {
-                const expectedFields = columnConfig.map(c => c.field).sort()
-                const savedFields = savedColumnConfig.map(c => c.field).sort()
+          // Verify column configuration was saved (same verification as products)
+          if (columnConfig !== undefined) {
+            if (Array.isArray(columnConfig) && Array.isArray(savedColumnConfig)) {
+              const columnConfigSaved = JSON.stringify(savedColumnConfig) === JSON.stringify(columnConfig)
+              if (columnConfigSaved) {
+                const customCols = columnConfig.filter((c: ColumnConfig) => c.isCustom)
+                console.log(`[POST] ✓ Column configuration verified in MongoDB: ${columnConfig.length} total columns (${customCols.length} custom)`)
+                if (customCols.length > 0) {
+                  console.log(`[POST] ✓ Custom columns persisted:`, customCols.map((c: ColumnConfig) => c.field))
+                }
+              } else {
+                console.warn(`[POST] ⚠ Column configuration verification failed`)
+                console.warn(`[POST] Expected: ${columnConfig.length} columns, Saved: ${savedColumnConfig.length} columns`)
+                const expectedFields = columnConfig.map((c: ColumnConfig) => c.field).sort()
+                const savedFields = savedColumnConfig.map((c: ColumnConfig) => c.field).sort()
                 console.warn(`[POST] Expected fields:`, expectedFields)
                 console.warn(`[POST] Saved fields:`, savedFields)
               }
+            } else {
+              console.warn(`[POST] ⚠ Column config type mismatch - Expected array, got:`, typeof savedColumnConfig)
             }
+          } else {
+            console.log(`[POST] Column config not provided in request - preserved existing: ${Array.isArray(savedColumnConfig) ? savedColumnConfig.length : 'none'}`)
           }
           
           // Alert if data count decreased unexpectedly (potential data loss)
