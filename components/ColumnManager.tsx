@@ -96,76 +96,92 @@ export default function ColumnManager({ columns, onColumnsChange, availableField
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition duration-200 text-sm font-medium"
+        className="flex items-center gap-2 px-3 md:px-4 py-2 bg-gray-100 hover:bg-gray-200 active:bg-gray-300 text-gray-700 rounded-lg transition duration-200 text-xs md:text-sm font-medium touch-manipulation"
       >
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-4 h-4 md:w-5 md:h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
         </svg>
-        {t('columns.manage')} ({visibleColumns.length}/{columns.length})
+        <span className="hidden sm:inline">{t('columns.manage')}</span>
+        <span className="sm:hidden">{t('columns.manage')}</span>
+        <span className="text-xs">({visibleColumns.length}/{columns.length})</span>
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-xl border border-gray-200 z-50 p-4">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-semibold text-gray-800">{t('columns.title')}</h3>
-            <button
-              onClick={() => setIsOpen(false)}
-              className="text-gray-400 hover:text-gray-600"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
+        <>
+          {/* Backdrop overlay for mobile */}
+          <div 
+            className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden"
+            onClick={() => setIsOpen(false)}
+          />
+          
+          {/* Modal/Dropdown */}
+          <div className="fixed inset-x-0 bottom-0 md:absolute md:right-0 md:bottom-auto md:mt-2 md:inset-x-auto md:w-80 w-full max-h-[90vh] md:max-h-[80vh] bg-white md:rounded-lg shadow-xl border border-gray-200 z-50 p-4 md:p-4 overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold text-gray-800">{t('columns.title')}</h3>
+              <button
+                onClick={() => setIsOpen(false)}
+                className="text-gray-400 hover:text-gray-600 p-1"
+                aria-label="Close"
+              >
+                <svg className="w-6 h-6 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
 
           {/* Visible Columns */}
           <div className="mb-4">
             <h4 className="text-sm font-medium text-gray-700 mb-2">{t('columns.visible')}</h4>
-            <div className="space-y-2 max-h-40 overflow-y-auto">
-              {visibleColumns.map((column) => (
-                <div key={column.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={column.visible}
-                      onChange={() => toggleColumn(column.id)}
-                      className="rounded"
-                    />
-                    <span className="text-sm text-gray-700">{column.label}</span>
+            {visibleColumns.length > 0 ? (
+              <div className="space-y-2 max-h-40 md:max-h-40 overflow-y-auto">
+                {visibleColumns.map((column) => (
+                  <div key={column.id} className="flex items-center justify-between p-2 md:p-2 bg-gray-50 rounded">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <input
+                        type="checkbox"
+                        checked={column.visible}
+                        onChange={() => toggleColumn(column.id)}
+                        className="rounded flex-shrink-0"
+                      />
+                      <span className="text-sm text-gray-700 truncate">{column.label}</span>
+                      {column.isCustom && (
+                        <span className="text-xs text-blue-600 flex-shrink-0">{t('columns.custom')}</span>
+                      )}
+                    </div>
                     {column.isCustom && (
-                      <span className="text-xs text-blue-600">{t('columns.custom')}</span>
+                      <button
+                        onClick={() => removeColumn(column.id)}
+                        className="text-red-500 hover:text-red-700 text-xs ml-2 flex-shrink-0 p-1"
+                        title={t('columns.remove')}
+                        aria-label={t('columns.remove')}
+                      >
+                        <svg className="w-5 h-5 md:w-4 md:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
                     )}
                   </div>
-                  {column.isCustom && (
-                    <button
-                      onClick={() => removeColumn(column.id)}
-                      className="text-red-500 hover:text-red-700 text-xs"
-                      title={t('columns.remove')}
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-400 italic">{t('columns.noVisible') || 'No visible columns'}</p>
+            )}
           </div>
 
           {/* Hidden Columns */}
           {hiddenColumns.length > 0 && (
             <div className="mb-4">
               <h4 className="text-sm font-medium text-gray-700 mb-2">{t('columns.hidden')}</h4>
-              <div className="space-y-2 max-h-32 overflow-y-auto">
+              <div className="space-y-2 max-h-32 md:max-h-32 overflow-y-auto">
                 {hiddenColumns.map((column) => (
-                  <div key={column.id} className="flex items-center gap-2 p-2 bg-gray-50 rounded">
+                  <div key={column.id} className="flex items-center gap-2 p-2 md:p-2 bg-gray-50 rounded">
                     <input
                       type="checkbox"
                       checked={column.visible}
                       onChange={() => toggleColumn(column.id)}
-                      className="rounded"
+                      className="rounded flex-shrink-0"
                     />
-                    <span className="text-sm text-gray-500">{column.label}</span>
+                    <span className="text-sm text-gray-500 truncate">{column.label}</span>
                   </div>
                 ))}
               </div>
@@ -202,7 +218,7 @@ export default function ColumnManager({ columns, onColumnsChange, availableField
               </button>
             </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   )
