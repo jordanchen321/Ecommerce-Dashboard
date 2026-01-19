@@ -232,7 +232,7 @@ export default function ColumnManager({ columns, onColumnsChange, availableField
                         <span className="text-xs text-blue-600 flex-shrink-0">{t('columns.custom')}</span>
                       )}
                     </div>
-                    {column.isCustom && (
+                    {(column.isCustom || column.field === 'totalValue') && (
                       <button
                         onClick={() => removeColumn(column.id)}
                         className="text-red-500 hover:text-red-700 text-xs ml-2 flex-shrink-0 p-1"
